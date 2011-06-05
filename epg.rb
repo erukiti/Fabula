@@ -1,6 +1,6 @@
 #! /usr/bin/env ruby -Ku
 # 
-# ‚Ğ‚Æ‚Ü‚¸ epgdump ‚Ì‚Í‚«o‚· XML ‚ğ parse ‚µ‚ÄAƒvƒƒOƒ‰ƒ€‚Ìˆê——‚ğæ‚é‚Æ‚±‚ë‚Ü‚ÅÀŒ±
+# ã²ã¨ã¾ãš epgdump ã®ã¯ãå‡ºã™ XML ã‚’ parse ã—ã¦ã€ãƒ—ãƒ­ã‚°ãƒ©ãƒ ã®ä¸€è¦§ã‚’å–ã‚‹ã¨ã“ã‚ã¾ã§å®Ÿé¨“
 # 
 
 
@@ -41,7 +41,7 @@ class EPGFromEpgdump
   end
 
   def EPGFromEpgdump.time_from_epgdump(epgdump_time)
-    #‚Ğ‚Æ‚Ü‚¸ƒ^ƒCƒ€ƒ][ƒ“‚Í +9000 ‚ÉŒˆ‚ß‚¤‚¿
+    #ã²ã¨ã¾ãšã‚¿ã‚¤ãƒ ã‚¾ãƒ¼ãƒ³ã¯ +9000 ã«æ±ºã‚ã†ã¡
     #2011060302400 +0900
     Time.mktime(epgdump_time[0..3], epgdump_time[4..5], epgdump_time[6..7], epgdump_time[8..9], epgdump_time[10..11], epgdump_time[12..13])
     
@@ -92,12 +92,12 @@ class ControlList
 
       next if control['channel'] != nil && control['channel'] != program['channel']
 
-      # ‚·‚×‚Äƒ}ƒbƒ`‚µ‚½‚Ì‚ÅApriority ‚ğ•ÏX
+      # ã™ã¹ã¦ãƒãƒƒãƒã—ãŸã®ã§ã€priority ã‚’å¤‰æ›´
 
-      # ˆê“xƒuƒ‰ƒbƒNƒŠƒXƒg(—Dæ“x:-1)‚Ìƒ`ƒFƒbƒN‚ª‚Â‚¢‚Ä‚µ‚Ü‚Á‚½ê‡A—Dæ“x‚Í•ÏX‚Å‚«‚È‚­‚È‚é
+      # ä¸€åº¦ãƒ–ãƒ©ãƒƒã‚¯ãƒªã‚¹ãƒˆ(å„ªå…ˆåº¦:-1)ã®ãƒã‚§ãƒƒã‚¯ãŒã¤ã„ã¦ã—ã¾ã£ãŸå ´åˆã€å„ªå…ˆåº¦ã¯å¤‰æ›´ã§ããªããªã‚‹
       next if program['priority'] < 0
 
-      # blacklist or —Dæ“xã¸
+      # blacklist or å„ªå…ˆåº¦ä¸Šæ˜‡
       program['priority'] = control['priority'] if control['priority'] < 0 || control['priority'] > program['priority']
   }
     program
@@ -106,9 +106,9 @@ class ControlList
 
 end
 
-# FIXME: ”z—ñ‚Å•\Œ»‚µ‚Ä‚éprogram ‚ğ‚·‚×‚Ä‚±‚ê‚ÌƒIƒuƒWƒFƒNƒg‚É’u‚«Š·‚¦‚é
+# FIXME: é…åˆ—ã§è¡¨ç¾ã—ã¦ã‚‹program ã‚’ã™ã¹ã¦ã“ã‚Œã®ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã«ç½®ãæ›ãˆã‚‹
 class Program
-  def initialize(program_list) # FIXME: b’è“IB
+  def initialize(program_list) # FIXME: æš«å®šçš„ã€‚
     @program_list = program_list
   end
 
@@ -126,8 +126,8 @@ class Program
 #print "#{@program_list[i]['stop']},  #{@program_list[i + 1]['start']}\n"
       next if @program_list[i]['stop'] <= @program_list[i + 1]['start']
 
-# FIXME: conflict ‚µ‚Ä‚È‚¨‚©‚Âƒ`ƒƒƒ“ƒlƒ‹‚ª–µ‚‚µ‚Ä‚éƒf[ƒ^‚ª‚È‚¢‚©’²‚×‚é
-      # confilict ‚µ‚Ä‚¢‚é‰Â”\«‚Ì‚ ‚é‰ò‚ÌŒŸo
+# FIXME: conflict ã—ã¦ãªãŠã‹ã¤ãƒãƒ£ãƒ³ãƒãƒ«ãŒçŸ›ç›¾ã—ã¦ã‚‹ãƒ‡ãƒ¼ã‚¿ãŒãªã„ã‹èª¿ã¹ã‚‹
+      # confilict ã—ã¦ã„ã‚‹å¯èƒ½æ€§ã®ã‚ã‚‹å¡Šã®æ¤œå‡º
 #print "conflict #{i + 1}\n"
       @conflict[may_conflict_cnt] = [@program_list[i], @program_list[i + 1]]
       mark = @program_list[i]['stop'] >= @program_list[i + 1]['stop'] ? @program_list[i]['stop'] : @program_list[i + 1]['stop'] 
@@ -151,7 +151,7 @@ class Program
     return if may_conflict_cnt == 0
 
 #p @conflict
-    # conflict ‰ğŒˆ
+    # conflict è§£æ±º
     @conflict.each { |conflict|
       slot = []
       conflict.each { |program|
@@ -186,7 +186,7 @@ class Program
 
   end
 
-  # FIXME: ‚Ğ‚Æ‚Ü‚¸Šm”F—pB‚à‚Á‚Æ‚¢‚¢–¼‘O‚É‘‚«Š·‚¦‚é‚×‚«
+  # FIXME: ã²ã¨ã¾ãšç¢ºèªç”¨ã€‚ã‚‚ã£ã¨ã„ã„åå‰ã«æ›¸ãæ›ãˆã‚‹ã¹ã
   def resolved
     @program_list
   end
