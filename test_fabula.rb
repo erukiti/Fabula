@@ -48,50 +48,13 @@ end
 
 
 class DummyEPG
-  def initialize(opt)
-  end
-  def program_list
-    [Program.new(
-      :category => "anime", 
-      :title => "ほげ", 
-      :start => Time.local(2011, 6, 3, 2, 45), 
-      :stop => Time.local(2011, 6, 3, 3, 15), 
-      :desc => "ほげですく", 
-      :channel => 'C39'
-    ), Program.new(
-      :category => "infomation", 
-      :title => "ふが", 
-      :stop => Time.local(2011, 6, 3, 3, 30), 
-      :start => Time.local(2011, 6, 3, 3, 15), 
-      :desc => "ふがですく", 
-      :channel => 'C39'
-    )]
-  end
+  attr_reader :program_list
 
-  def channel_list
-    {"C39"=>"テレビ東京１"}
-  end
-end
-
-class DummyEPG2
   def initialize(opt)
-  end
-  def program_list
-    [Program.new(
-      :category => "anime", 
-      :title => "hoge/1", 
-      :start => Time.local(2011, 6, 3, 2, 45), 
-      :stop => Time.local(2011, 6, 3, 3, 0), 
-      :desc => "hoge1", 
-      :channel => 'C39'
-    ), Program.new(
-      :category => "anime", 
-      :title => "hoge/2", 
-      :start => Time.local(2011, 6, 3, 3, 0), 
-      :stop => Time.local(2011, 6, 3, 3, 15), 
-      :desc => "hoge2", 
-      :channel => 'C39'
-    )]
+    @program_list = []
+    opt.each { |data|
+      @program_list << Program.new(data)
+    }
   end
 
   def channel_list
@@ -100,8 +63,8 @@ class DummyEPG2
 end
 
 class DummyAccessor
-  def initialize
-    @epg = EPG.new(DummyEPG)
+  def initialize(opt)
+    @epg = EPG.new(DummyEPG, opt)
   end
   def get_epg(ch, is_short)
     @epg if ch == 'C39'
@@ -116,27 +79,24 @@ class DummyAccessor
   end
 end
 
-class DummyAccessor2
-  def initialize
-    @epg = EPG.new(EPGFromNull)
-  end
-  def get_epg(ch, is_short)
-    @epg
-  end
-  def discovery_epg(channel, is_short)
-    channel.each { |ch, name|
-      @epg.update(get_epg(ch, is_short))
-      # FIXME: epg 取得時に失敗した場合何回かリトライしてみる？
-    }
-
-    @epg
-  end
-end
-
 class TC_EPG < Test::Unit::TestCase
   def test_program
     # 一応 dummy データに問題がない事を確認
-    epg = EPG.new(DummyEPG)
+    epg = EPG.new(DummyEPG, [{
+      :category => "anime", 
+      :title => "ほげ", 
+      :start => Time.local(2011, 6, 3, 2, 45), 
+      :stop => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ほげですく", 
+      :channel => 'C39'
+    }, {
+      :category => "infomation", 
+      :title => "ふが", 
+      :stop => Time.local(2011, 6, 3, 3, 30), 
+      :start => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ふがですく", 
+      :channel => 'C39'
+    }])
     assert_equal(epg.program_list.size, 2)
     assert_equal(epg.program_list[0].category, "anime")
     assert_equal(epg.program_list[0].title, "ほげ")
@@ -151,8 +111,36 @@ class TC_EPG < Test::Unit::TestCase
   end
 
   def test_update
-    epg = EPG.new(DummyEPG)
-    epg2 = EPG.new(DummyEPG2)
+    epg = EPG.new(DummyEPG, [{
+      :category => "anime", 
+      :title => "ほげ", 
+      :start => Time.local(2011, 6, 3, 2, 45), 
+      :stop => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ほげですく", 
+      :channel => 'C39'
+    }, {
+      :category => "infomation", 
+      :title => "ふが", 
+      :stop => Time.local(2011, 6, 3, 3, 30), 
+      :start => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ふがですく", 
+      :channel => 'C39'
+    }])
+    epg2 = EPG.new(DummyEPG, [{
+      :category => "anime", 
+      :title => "hoge/1", 
+      :start => Time.local(2011, 6, 3, 2, 45), 
+      :stop => Time.local(2011, 6, 3, 3, 0), 
+      :desc => "hoge1", 
+      :channel => 'C39'
+    }, {
+      :category => "anime", 
+      :title => "hoge/2", 
+      :start => Time.local(2011, 6, 3, 3, 0), 
+      :stop => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "hoge2", 
+      :channel => 'C39'
+    }])
     epg.update(epg2)
     assert_equal(epg.program_list.size, 3)
     assert_equal(epg.program_list[0].category, "anime")
@@ -169,22 +157,31 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list[2].stop, Time.local(2011, 6, 3, 3, 30))
   end
 
-  def test_minutely
-    fabula = Fabula.new
-    fabula.minutely
-  end
-
   def test_discovery_epg
     fabula = Fabula.new
     fabula.injection_config(:channel => {'C39' => 'テレビ東京'})
-    fabula.injection_accessor(DummyAccessor2)
+    fabula.injection_accessor(DummyAccessor, [])
     fabula.discovery_epg(true)
     epg = fabula.epg
     assert_equal(epg.program_list.size, 0)
 
     fabula = Fabula.new
     fabula.injection_config(:channel => {'C39' => 'テレビ東京'})
-    fabula.injection_accessor(DummyAccessor)
+    fabula.injection_accessor(DummyAccessor, [{
+      :category => "anime", 
+      :title => "ほげ", 
+      :start => Time.local(2011, 6, 3, 2, 45), 
+      :stop => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ほげですく", 
+      :channel => 'C39'
+    }, {
+      :category => "infomation", 
+      :title => "ふが", 
+      :stop => Time.local(2011, 6, 3, 3, 30), 
+      :start => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ふがですく", 
+      :channel => 'C39'
+    }])
     fabula.discovery_epg(true)
     epg = fabula.epg
     assert_equal(epg.program_list.size, 2)
@@ -202,8 +199,21 @@ class TC_EPG < Test::Unit::TestCase
   end
 
   def test_program_map
-  
-    epg = EPG.new(DummyEPG)
+    epg = EPG.new(DummyEPG, [{
+      :category => "anime", 
+      :title => "ほげ", 
+      :start => Time.local(2011, 6, 3, 2, 45), 
+      :stop => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ほげですく", 
+      :channel => 'C39'
+    }, {
+      :category => "infomation", 
+      :title => "ふが", 
+      :stop => Time.local(2011, 6, 3, 3, 30), 
+      :start => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ふがですく", 
+      :channel => 'C39'
+    }])
 
     # タイトル一致 (完全一致)
     cl = ControlList.new.add("ほげ", nil, nil, nil, nil, 1)
@@ -321,7 +331,88 @@ class TC_EPG < Test::Unit::TestCase
 
   end
 
+  def test_resolve
+    # 非衝突 (時間連続)
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39', :priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39', :priority => 1},
+    ])
 
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
+
+    # 
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39', :priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39', :priority => 1},
+      {:title => "3", :start => Time.local(2011,6, 3, 3,  5), :stop => Time.local(2011, 6, 3, 3, 20), :channel => 'C38', :priority => 1},
+    ])
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, true)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, true)
+
+    #
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39' ,:priority => 1},
+      {:title => "3", :start => Time.local(2011,6, 3, 3,  5), :stop => Time.local(2011, 6, 3, 3, 20), :channel => 'C38' ,:priority => 1},
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C37' ,:priority => 1},
+    ])
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, true)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, true)
+    assert_equal(epg.program_list.find{ |a| a.title == "4"}.conflict, true)
+
+    #
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39' ,:priority => 1},
+      {:title => "3", :start => Time.local(2011,6, 3, 3,  5), :stop => Time.local(2011, 6, 3, 3, 20), :channel => 'C38' ,:priority => 1},
+    ])
+    epg.resolve_conflict 2
+    assert_equal(epg.conflict?, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.slot, epg.program_list.find{ |a| a.title == "2"}.slot)
+    assert_not_equal(epg.program_list.find{ |a| a.title == "1"}.slot, epg.program_list.find{ |a| a.title == "3"}.slot)
+    assert_not_equal(epg.program_list.find{ |a| a.title == "2"}.slot, epg.program_list.find{ |a| a.title == "3"}.slot)
+
+    #
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39' ,:priority => 1},
+      {:title => "3", :start => Time.local(2011,6, 3, 3,  5), :stop => Time.local(2011, 6, 3, 3, 20), :channel => 'C38' ,:priority => 1},
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C37' ,:priority => 1},
+    ])
+    epg.resolve_conflict 2
+    assert_equal(epg.conflict?, true)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "4"}.conflict, true)
+    assert_not_equal(epg.program_list.find{ |a| a.title == "2"}.slot, epg.program_list.find{ |a| a.title == "3"}.slot)
+
+    #
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39' ,:priority => 1},
+      {:title => "3", :start => Time.local(2011,6, 3, 3,  5), :stop => Time.local(2011, 6, 3, 3, 20), :channel => 'C38' ,:priority => 1},
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C37' ,:priority => 1},
+    ])
+    epg.resolve_conflict 3
+    assert_equal(epg.conflict?, false)
+    assert_not_equal(epg.program_list.find{ |a| a.title == "2"}.slot, epg.program_list.find{ |a| a.title == "3"}.slot)
+    assert_not_equal(epg.program_list.find{ |a| a.title == "3"}.slot, epg.program_list.find{ |a| a.title == "4"}.slot)
+    assert_not_equal(epg.program_list.find{ |a| a.title == "2"}.slot, epg.program_list.find{ |a| a.title == "4"}.slot)
+
+
+  end
 end
 
 

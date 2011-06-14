@@ -34,6 +34,79 @@ class EPG
    @program_list = new_program_list
   end
 
+  def resolve_conflict(device_number)
+    channel = {}
+
+    @program_list.sort! { |a, b| a.start <=> b.start }
+    @conflict = []
+    @conflict_cnt = 0
+    may_conflict_cnt = 0
+
+    i = 0
+    begin
+#print "====\n#{i}: #{@program_list[i]['title']}\n"
+#print "#{@program_list[i]['stop']},  #{@program_list[i + 1]['start']}\n"
+      next if @program_list[i].stop <= @program_list[i + 1].start
+
+# FIXME: conflict してなおかつチャンネルが矛盾してるデータがないか調べる
+      # confilict している可能性のある塊の検出
+#print "conflict #{i + 1}\n"
+      @conflict[may_conflict_cnt] = [@program_list[i], @program_list[i + 1]]
+      mark = @program_list[i].stop >= @program_list[i + 1].stop ? @program_list[i].stop : @program_list[i + 1].stop 
+      j = i + 2
+      while j <= @program_list.size - 1
+#print "#{j}: #{@program_list[j]['title']}\n"
+#print "#{mark}, #{@program_list[j]['start']}\n"
+        break if mark <= @program_list[j].start
+#print "conflict #{j}\n"
+        @conflict[may_conflict_cnt] << @program_list[j]
+        mark = mark >= @program_list[j].stop ? mark : @program_list[j].stop
+        j += 1
+      end
+      may_conflict_cnt += 1
+#print "#{j}\n<<<<\n";
+      i = j - 1
+    ensure 
+      i += 1
+    end while i < @program_list.size - 2
+
+    return if may_conflict_cnt == 0
+
+#p @conflict
+    # conflict 解決
+    @conflict.each { |conflict|
+      slot = []
+      conflict.each { |program|
+        is_conflict = true
+#print "++++\n"
+#p program['start']
+        for i in 0 ... device_number
+#print "ch: #{i}\n"
+#print "slot: #{slot[i].inspect}\n"
+          if slot[i] == nil || slot[i] <= program.start
+#print "into: #{i}\n"
+            slot[i] = program.stop
+#print "*slot: #{slot[i].inspect}\n"
+            is_conflict = false
+            program.slot = i
+            break
+          end
+        end
+        if is_conflict
+#print "conflict: #{program['title']}\n"
+          @conflict_cnt += 1 
+          program.conflict = true
+        end
+      }
+    }
+  end
+
+  def conflict?
+#p @conflict
+    @conflict_cnt > 0
+
+  end
+
 end
 
 class EPGFromNull
@@ -169,8 +242,8 @@ class Fabula
     @temporary = nil
   end
 
-  def injection_accessor(accessor)
-    @accessor = accessor.new
+  def injection_accessor(accessor, opt)
+    @accessor = accessor.new(opt)
   end
 
   def injection_config(config)
@@ -260,7 +333,7 @@ class FabulaAccessor
   end
 
   def discovery_epg(channel, is_short)
-print "discovery\n"
+print "----discovery\n"
     epg = EPG.new(EPGFromNull)
 
     channel.each { |ch, name|
