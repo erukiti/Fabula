@@ -299,8 +299,8 @@ print "!epgdump file: #{filename}\n"
     save_order
   end
 
-  def discovery_epg(is_short)
-    @epg = @accessor.discovery_epg(@channel, is_short)
+  def discovery_epg(sec = 3)
+    @epg = @accessor.discovery_epg(@channel, sec) # discovery したら EPG データが新規作成になる
   end
 
 end
@@ -318,13 +318,13 @@ class FabulaAccessor
     ["#{@temporary}/#{ch}_#{time}.ts", "#{@temporary}/#{ch}_#{time}_epg.xml"]
   end
 
-  def get_epg(ch, is_short)
+  def get_epg(ch, sec)
     ts_name, epg_name = get_filename(ch)
     epgtemp_name = "#{epg_name}_progress"
-    sec = is_short ? 3 : 60
 
     `recpt1 #{ch} #{sec} #{ts_name}`
     dump = `epgdump #{ch} #{ts_name} -`
+    File.unlink ts_name
 
     # FIXME: stderr からログを取得するようにする (特に recpt1)
     # FIXME: それぞれのコマンドが失敗したら false を返すようにする
@@ -332,12 +332,12 @@ class FabulaAccessor
     EPG.new(EPGFromEpgdump, dump)
   end
 
-  def discovery_epg(channel, is_short)
+  def discovery_epg(channel, sec)
 print "----discovery\n"
     epg = EPG.new(EPGFromNull)
 
     channel.each { |ch, name|
-      epg.update(get_epg(ch, is_short))
+      epg.update(get_epg(ch, sec))
       # FIXME: epg 取得時に失敗した場合何回かリトライしてみる？
     }
 

@@ -69,9 +69,9 @@ class DummyAccessor
   def get_epg(ch, is_short)
     @epg if ch == 'C39'
   end
-  def discovery_epg(channel, is_short)
+  def discovery_epg(channel, sec)
     channel.each { |ch, name|
-      @epg.update(get_epg(ch, is_short))
+      @epg.update(get_epg(ch, sec))
       # FIXME: epg 取得時に失敗した場合何回かリトライしてみる？
     }
 
@@ -161,7 +161,7 @@ class TC_EPG < Test::Unit::TestCase
     fabula = Fabula.new
     fabula.injection_config(:channel => {'C39' => 'テレビ東京'})
     fabula.injection_accessor(DummyAccessor, [])
-    fabula.discovery_epg(true)
+    fabula.discovery_epg
     epg = fabula.epg
     assert_equal(epg.program_list.size, 0)
 
@@ -182,7 +182,7 @@ class TC_EPG < Test::Unit::TestCase
       :desc => "ふがですく", 
       :channel => 'C39'
     }])
-    fabula.discovery_epg(true)
+    fabula.discovery_epg
     epg = fabula.epg
     assert_equal(epg.program_list.size, 2)
     assert_equal(epg.program_list[0].category, "anime")
