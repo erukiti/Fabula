@@ -13,25 +13,73 @@ class EPG
   def initialize(initializer, opt = nil)
     init = initializer.new(opt)
     @program_list = init.program_list
+    @alert = []
   end
 
   def update(epg_updater)
     # epg_updater に含まれている時間の範囲を算出する
 
-    start = nil
-    stop = nil
-    epg_updater.program_list.each { |program|
-      start = program.start if start.nil? || start > program.start
-      stop = program.stop if stop.nil? || stop < program.stop
-    }
+    cnt_master = 0
+    cnt_updater = 0
+    new_program_list = []
+    master = @program_list
+    updater = epg_updater.program_list
 
-    # 新しい program_list を作成する
-    # @program_list の start 以前のものを抽出
-    new_program_list = @program_list.select{ |program| program.stop <= start } +
-                       epg_updater.program_list +
-                       @program_list.select{ |program| stop <= program.start}
+    while master.size > cnt_master || updater.size > cnt_updater
 
-   @program_list = new_program_list
+      if master.size == cnt_master || (updater.size > cnt_updater && updater[cnt_updater].stop <= master[cnt_master].start)
+        # アップデータ側にしかない
+        new_program_list << updater[cnt_updater]
+        cnt_updater += 1
+        next
+      end
+
+      if updater.size == cnt_updater || (master.size > cnt_master && master[cnt_master].stop <= updater[cnt_updater].start)
+        # マスター側にしかない
+        new_program_list << master[cnt_master]
+
+        
+        cnt_master += 1
+        next
+      end
+
+      if master[cnt_master].start == updater[cnt_updater].start &&
+         master[cnt_master].stop == updater[cnt_updater].stop
+        # 同一
+
+
+        new_program_list << master[cnt_master]
+        
+        cnt_master += 1
+        cnt_updater += 1
+        next
+      end
+
+      cnt_start = cnt_updater
+      stop = master[cnt_master].stop > updater[cnt_updater].stop ? master[cnt_master].stop : updater[cnt_updater].stop
+      cnt_master += 1
+      cnt_updater += 1
+      while master.size > cnt_master && updater.size > cnt_updater && 
+            (stop > master[cnt_master].start || stop > updater[cnt_updater].start)
+        if stop > updater[cnt_updater].start
+          stop = updater[cnt_updater].stop if stop < updater[cnt_updater].stop
+          cnt_updater += 1
+        end
+        if stop > master[cnt_master].start
+          stop = master[cnt_master].stop if stop < master[cnt_master].stop
+          cnt_master += 1
+        end
+      end
+
+      (cnt_start...cnt_updater).each { |cnt|
+        new_program_list << updater[cnt]
+      }
+    end
+
+# FIXME: alert の追加
+#        上書きされる時には、alert を出すべきである
+
+    @program_list = new_program_list
   end
 
   def resolve_conflict(device_number)

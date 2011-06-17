@@ -80,37 +80,133 @@ class DummyAccessor
 end
 
 class TC_EPG < Test::Unit::TestCase
-  def test_program
-    # 一応 dummy データに問題がない事を確認
-    epg = EPG.new(DummyEPG, [{
-      :category => "anime", 
-      :title => "ほげ", 
-      :start => Time.local(2011, 6, 3, 2, 45), 
-      :stop => Time.local(2011, 6, 3, 3, 15), 
-      :desc => "ほげですく", 
-      :channel => 'C39'
-    }, {
-      :category => "infomation", 
-      :title => "ふが", 
-      :stop => Time.local(2011, 6, 3, 3, 30), 
-      :start => Time.local(2011, 6, 3, 3, 15), 
-      :desc => "ふがですく", 
-      :channel => 'C39'
-    }])
-    assert_equal(epg.program_list.size, 2)
-    assert_equal(epg.program_list[0].category, "anime")
-    assert_equal(epg.program_list[0].title, "ほげ")
-    assert_equal(epg.program_list[0].start, Time.local(2011, 6, 3, 2, 45))
-    assert_equal(epg.program_list[0].stop, Time.local(2011, 6, 3, 3, 15))
-    assert_equal(epg.program_list[0].desc, "ほげですく")
-    assert_equal(epg.program_list[0].channel, "C39")
-    assert_equal(epg.program_list[1].category, "infomation")
-    assert_equal(epg.program_list[1].title, "ふが")
-    assert_equal(epg.program_list[1].start, Time.local(2011, 6, 3, 3, 15))
-    assert_equal(epg.program_list[1].stop, Time.local(2011, 6, 3, 3, 30))
-  end
-
   def test_update
+    epg = EPG.new(DummyEPG, [
+      {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
+    ])
+    epg2 = EPG.new(DummyEPG, [
+      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30)},
+      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
+      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30)},
+    ])
+
+    epg.update(epg2)
+    assert_equal(epg.program_list.size, 3)
+    assert_equal(epg.program_list[0].title, 'C1')
+    assert_equal(epg.program_list[1].title, 'M0')
+    assert_equal(epg.program_list[2].title, 'C3')
+    assert_equal(epg.program_list[0].start, Time.local(2011, 6, 14, 23, 0))
+    assert_equal(epg.program_list[0].stop,  Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list[1].start, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list[1].stop,  Time.local(2011, 6, 15, 0, 0))
+    assert_equal(epg.program_list[2].start, Time.local(2011, 6, 15, 10, 0))
+    assert_equal(epg.program_list[2].stop,  Time.local(2011, 6, 15, 10, 30))
+
+    epg = EPG.new(DummyEPG, [
+      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30)},
+      {:title => 'M2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
+      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30)},
+    ])
+    epg2 = EPG.new(DummyEPG, [
+      {:title => 'C0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
+    ])
+
+    epg.update(epg2)
+    assert_equal(epg.program_list.size, 3)
+    assert_equal(epg.program_list[0].title, 'M1')
+    assert_equal(epg.program_list[1].title, 'M2')
+    assert_equal(epg.program_list[2].title, 'M3')
+    assert_equal(epg.program_list[0].start, Time.local(2011, 6, 14, 23, 0))
+    assert_equal(epg.program_list[0].stop,  Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list[1].start, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list[1].stop,  Time.local(2011, 6, 15, 0, 0))
+    assert_equal(epg.program_list[2].start, Time.local(2011, 6, 15, 10, 0))
+    assert_equal(epg.program_list[2].stop,  Time.local(2011, 6, 15, 10, 30))
+
+    epg = EPG.new(DummyEPG, [
+      {:title => 'M0',  :start => Time.local(2011, 6, 14, 22, 0),  :stop => Time.local(2011, 6, 14, 23, 00)},
+      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 15, 0, 50)},
+      {:title => 'M2',  :start => Time.local(2011, 6, 15, 9, 0),  :stop => Time.local(2011, 6, 15, 10, 0)},
+      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30)},
+      {:title => 'M4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 10, 45)},
+      {:title => 'M5',  :start => Time.local(2011, 6, 15, 10, 45), :stop => Time.local(2011, 6, 15, 11, 0)},
+      {:title => 'M6',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 30)},
+      {:title => 'M7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 12, 30)},
+      {:title => 'M8',  :start => Time.local(2011, 6, 15, 12, 30), :stop => Time.local(2011, 6, 15, 13, 30)},
+      {:title => 'M9',  :start => Time.local(2011, 6, 15, 13, 30), :stop => Time.local(2011, 6, 15, 14, 5)},
+      {:title => 'M10',  :start => Time.local(2011, 6, 15, 14, 5),  :stop => Time.local(2011, 6, 15, 14, 10)},
+      {:title => 'M11', :start => Time.local(2011, 6, 15, 14, 10), :stop => Time.local(2011, 6, 15, 14, 30)},
+      {:title => 'M12', :start => Time.local(2011, 6, 15, 14, 45), :stop => Time.local(2011, 6, 15, 15, 0)},
+      {:title => 'M13', :start => Time.local(2011, 6, 15, 15, 0), :stop => Time.local(2011, 6, 15, 16, 0)},
+    ])
+    epg2 = EPG.new(DummyEPG, [
+      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30)},
+      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
+      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30)},
+      {:title => 'C4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 11, 0)},
+      {:title => 'C5',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 15)},
+      {:title => 'C6',  :start => Time.local(2011, 6, 15, 11, 15), :stop => Time.local(2011, 6, 15, 11, 30)},
+      {:title => 'C7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 11, 35)},
+      {:title => 'C8',  :start => Time.local(2011, 6, 15, 11, 35), :stop => Time.local(2011, 6, 15, 12, 0)},
+      {:title => 'C9',  :start => Time.local(2011, 6, 15, 12, 0),  :stop => Time.local(2011, 6, 15, 13, 0)},
+      {:title => 'C10', :start => Time.local(2011, 6, 15, 13, 0),  :stop => Time.local(2011, 6, 15, 14, 0)},
+      {:title => 'C11', :start => Time.local(2011, 6, 15, 14, 0),  :stop => Time.local(2011, 6, 15, 14, 10)},
+      {:title => 'C12', :start => Time.local(2011, 6, 15, 14, 15), :stop => Time.local(2011, 6, 15, 14, 30)},
+      {:title => 'C13', :start => Time.local(2011, 6, 15, 14, 30), :stop => Time.local(2011, 6, 15, 15, 0)},
+    ])
+
+    epg.update(epg2)
+    assert_equal(epg.program_list.size, 16)
+    assert_equal(epg.program_list[0].title, 'M0')
+    assert_equal(epg.program_list[1].title, 'C1')
+    assert_equal(epg.program_list[2].title, 'C2')
+    assert_equal(epg.program_list[3].title, 'M2')
+    assert_equal(epg.program_list[4].title, 'M3')
+    assert_equal(epg.program_list[5].title, 'C4')
+    assert_equal(epg.program_list[6].title, 'C5')
+    assert_equal(epg.program_list[7].title, 'C6')
+    assert_equal(epg.program_list[8].title, 'C7')
+    assert_equal(epg.program_list[9].title, 'C8')
+    assert_equal(epg.program_list[10].title, 'C9')
+    assert_equal(epg.program_list[11].title, 'C10')
+    assert_equal(epg.program_list[12].title, 'C11')
+    assert_equal(epg.program_list[13].title, 'C12')
+    assert_equal(epg.program_list[14].title, 'C13')
+    assert_equal(epg.program_list[15].title, 'M13')
+
+    assert_equal(epg.program_list[0].start, Time.local(2011, 6, 14, 22, 0))
+    assert_equal(epg.program_list[0].stop,  Time.local(2011, 6, 14, 23, 0))
+    assert_equal(epg.program_list[1].start, Time.local(2011, 6, 14, 23, 0))
+    assert_equal(epg.program_list[1].stop,  Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list[2].start, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list[2].stop,  Time.local(2011, 6, 15, 0, 0))
+    assert_equal(epg.program_list[3].start, Time.local(2011, 6, 15, 9, 0))
+    assert_equal(epg.program_list[3].stop,  Time.local(2011, 6, 15, 10, 0))
+    assert_equal(epg.program_list[4].start, Time.local(2011, 6, 15, 10, 0))
+    assert_equal(epg.program_list[4].stop,  Time.local(2011, 6, 15, 10, 30))
+    assert_equal(epg.program_list[5].start, Time.local(2011, 6, 15, 10, 30))
+    assert_equal(epg.program_list[5].stop,  Time.local(2011, 6, 15, 11, 0))
+    assert_equal(epg.program_list[6].start, Time.local(2011, 6, 15, 11, 0))
+    assert_equal(epg.program_list[6].stop,  Time.local(2011, 6, 15, 11, 15))
+    assert_equal(epg.program_list[7].start, Time.local(2011, 6, 15, 11, 15))
+    assert_equal(epg.program_list[7].stop,  Time.local(2011, 6, 15, 11, 30))
+    assert_equal(epg.program_list[8].start, Time.local(2011, 6, 15, 11, 30))
+    assert_equal(epg.program_list[8].stop,  Time.local(2011, 6, 15, 11, 35))
+    assert_equal(epg.program_list[9].start, Time.local(2011, 6, 15, 11, 35))
+    assert_equal(epg.program_list[9].stop,  Time.local(2011, 6, 15, 12, 0))
+    assert_equal(epg.program_list[10].start, Time.local(2011, 6, 15, 12, 0))
+    assert_equal(epg.program_list[10].stop,  Time.local(2011, 6, 15, 13, 0))
+    assert_equal(epg.program_list[11].start, Time.local(2011, 6, 15, 13, 0))
+    assert_equal(epg.program_list[11].stop,  Time.local(2011, 6, 15, 14, 0))
+    assert_equal(epg.program_list[12].start, Time.local(2011, 6, 15, 14, 0))
+    assert_equal(epg.program_list[12].stop,  Time.local(2011, 6, 15, 14, 10))
+    assert_equal(epg.program_list[13].start, Time.local(2011, 6, 15, 14, 15))
+    assert_equal(epg.program_list[13].stop,  Time.local(2011, 6, 15, 14, 30))
+    assert_equal(epg.program_list[14].start, Time.local(2011, 6, 15, 14, 30))
+    assert_equal(epg.program_list[14].stop,  Time.local(2011, 6, 15, 15, 0))
+    assert_equal(epg.program_list[15].start, Time.local(2011, 6, 15, 15, 0))
+    assert_equal(epg.program_list[15].stop,  Time.local(2011, 6, 15, 16, 0))
+
     epg = EPG.new(DummyEPG, [{
       :category => "anime", 
       :title => "ほげ", 
@@ -155,6 +251,36 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list[2].title, "ふが")
     assert_equal(epg.program_list[2].start, Time.local(2011, 6, 3, 3, 15))
     assert_equal(epg.program_list[2].stop, Time.local(2011, 6, 3, 3, 30))
+  end
+
+  def test_program
+    # 一応 dummy データに問題がない事を確認
+    epg = EPG.new(DummyEPG, [{
+      :category => "anime", 
+      :title => "ほげ", 
+      :start => Time.local(2011, 6, 3, 2, 45), 
+      :stop => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ほげですく", 
+      :channel => 'C39'
+    }, {
+      :category => "infomation", 
+      :title => "ふが", 
+      :stop => Time.local(2011, 6, 3, 3, 30), 
+      :start => Time.local(2011, 6, 3, 3, 15), 
+      :desc => "ふがですく", 
+      :channel => 'C39'
+    }])
+    assert_equal(epg.program_list.size, 2)
+    assert_equal(epg.program_list[0].category, "anime")
+    assert_equal(epg.program_list[0].title, "ほげ")
+    assert_equal(epg.program_list[0].start, Time.local(2011, 6, 3, 2, 45))
+    assert_equal(epg.program_list[0].stop, Time.local(2011, 6, 3, 3, 15))
+    assert_equal(epg.program_list[0].desc, "ほげですく")
+    assert_equal(epg.program_list[0].channel, "C39")
+    assert_equal(epg.program_list[1].category, "infomation")
+    assert_equal(epg.program_list[1].title, "ふが")
+    assert_equal(epg.program_list[1].start, Time.local(2011, 6, 3, 3, 15))
+    assert_equal(epg.program_list[1].stop, Time.local(2011, 6, 3, 3, 30))
   end
 
   def test_discovery_epg
