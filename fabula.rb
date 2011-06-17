@@ -27,15 +27,17 @@ class EPG
 
     while master.size > cnt_master || updater.size > cnt_updater
 
+      # アップデータ側にしかない
       if master.size == cnt_master || (updater.size > cnt_updater && updater[cnt_updater].stop <= master[cnt_master].start)
-        # アップデータ側にしかない
+        @alert << "++#{updater[cnt_updater].start} - #{updater[cnt_updater].stop} 「#{updater[cnt_updater].title}」"
+
         new_program_list << updater[cnt_updater]
         cnt_updater += 1
         next
       end
 
+      # マスター側にしかない
       if updater.size == cnt_updater || (master.size > cnt_master && master[cnt_master].stop <= updater[cnt_updater].start)
-        # マスター側にしかない
         new_program_list << master[cnt_master]
 
         
@@ -43,17 +45,17 @@ class EPG
         next
       end
 
+      # 同一
       if master[cnt_master].start == updater[cnt_updater].start &&
          master[cnt_master].stop == updater[cnt_updater].stop
-        # 同一
-
-
         new_program_list << master[cnt_master]
         
         cnt_master += 1
         cnt_updater += 1
         next
       end
+
+      replaced_start = cnt_master
 
       cnt_start = cnt_updater
       stop = master[cnt_master].stop > updater[cnt_updater].stop ? master[cnt_master].stop : updater[cnt_updater].stop
@@ -71,15 +73,31 @@ class EPG
         end
       end
 
+      #replace されるので alert を出す
+      (replaced_start...cnt_master).each { |cnt|
+        @alert << "- #{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」"
+      }
+
+      #replace を行いつつ、上書き側の alert を出す
       (cnt_start...cnt_updater).each { |cnt|
+        @alert << "+ #{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」"
         new_program_list << updater[cnt]
       }
+
+      #FIXME: alert をもっとまともな形式にするならば、テストを書く
+      #       例えば、@alert << {:start => master[cnt].start, :stop => master[cnt].stop, :title => master[cnt].title}
+
     end
 
-# FIXME: alert の追加
-#        上書きされる時には、alert を出すべきである
-
     @program_list = new_program_list
+  end
+
+  def alert
+    @alert
+  end
+
+  def alert_clear
+    @alert = []
   end
 
   def resolve_conflict(device_number)
@@ -348,7 +366,7 @@ print "!epgdump file: #{filename}\n"
   end
 
   def discovery_epg(sec = 3)
-    @epg = @accessor.discovery_epg(@channel, sec) # discovery したら EPG データが新規作成になる
+    @epg.update(@accessor.discovery_epg(@channel, sec)) # discovery して update を行う
   end
 
 end

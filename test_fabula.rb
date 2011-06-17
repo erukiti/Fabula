@@ -207,6 +207,7 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list[15].start, Time.local(2011, 6, 15, 15, 0))
     assert_equal(epg.program_list[15].stop,  Time.local(2011, 6, 15, 16, 0))
 
+
     epg = EPG.new(DummyEPG, [{
       :category => "anime", 
       :title => "ほげ", 
