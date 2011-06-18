@@ -87,6 +87,9 @@ class EPG
       #FIXME: alert をもっとまともな形式にするならば、テストを書く
       #       例えば、@alert << {:start => master[cnt].start, :stop => master[cnt].stop, :title => master[cnt].title}
 
+
+      # FIXME: タイトルなどデータが変わった場合なんかも更新するようにする
+
     end
 
     @program_list = new_program_list
@@ -303,6 +306,7 @@ class Fabula
 
   def initialize()
     @channel = []
+#    @epg = []
     @epg = EPG.new(EPGFromNull)
     @accessor = FabulaAccessor.new
     @temporary = nil
@@ -315,6 +319,8 @@ class Fabula
   def injection_config(config)
     @channel = config[:channel]
     @temporary = config[:temporary]
+
+#    init_epg
   end
 
   def load_config
@@ -323,7 +329,17 @@ class Fabula
     @channel = config_data[:channel]
     @accessor.temporary = config_data[:temporary]
     # FIXME: temporary directory 処理
+
+#    init_epg
   end
+
+  def init_epg
+    @channel.each { |ch, name|
+      @epg[ch] = EPG.new(EPGFromNull)
+    }
+  end
+
+
 
   def load_order
     #begin
@@ -359,14 +375,17 @@ print "!epgdump file: #{filename}\n"
 
 
   def minutely
-    load_config
-    load_order
-    discovery_epg(true) if @epg.program_list.empty?
-    save_order
+#    load_config
+#    load_order
+#    discovery_epg(true) if @epg.program_list.empty?
+#    save_order
   end
 
   def discovery_epg(sec = 3)
-    @epg.update(@accessor.discovery_epg(@channel, sec)) # discovery して update を行う
+    @channel.each { |ch, name|
+      @epg.update(@accessor.discovery_epg(ch, sec)) # discovery して update を行う
+    }
+
   end
 
 end
@@ -398,14 +417,12 @@ class FabulaAccessor
     EPG.new(EPGFromEpgdump, dump)
   end
 
-  def discovery_epg(channel, sec)
+  def discovery_epg(ch, sec)
 print "----discovery\n"
     epg = EPG.new(EPGFromNull)
 
-    channel.each { |ch, name|
-      epg.update(get_epg(ch, sec))
+    epg.update(get_epg(ch, sec))
       # FIXME: epg 取得時に失敗した場合何回かリトライしてみる？
-    }
 
     epg
   end

@@ -69,11 +69,9 @@ class DummyAccessor
   def get_epg(ch, is_short)
     @epg if ch == 'C39'
   end
-  def discovery_epg(channel, sec)
-    channel.each { |ch, name|
-      @epg.update(get_epg(ch, sec))
+  def discovery_epg(ch, sec)
+    @epg.update(get_epg(ch, sec))
       # FIXME: epg 取得時に失敗した場合何回かリトライしてみる？
-    }
 
     @epg
   end
