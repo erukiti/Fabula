@@ -61,6 +61,9 @@ class DummyEPG
   def channel_list
     {"C39"=>"テレビ東京１"}
   end
+  def fresh
+    {}
+  end
 end
 
 class DummyAccessor

@@ -9,11 +9,13 @@ require 'fileutils'
 class EPG
   attr_reader :program_list
   attr_reader :channel_list
+  attr_accessor :fresh
 
   def initialize(initializer, opt = nil)
     init = initializer.new(opt)
     @program_list = init.program_list
     @alert = []
+    @fresh = init.fresh
   end
 
   def update(epg_updater)
@@ -22,7 +24,10 @@ class EPG
       channel[program.channel] = true unless channel[program.channel]
     }
     epg_updater.program_list.each { |program|
-      channel[program.channel] = true unless channel[program.channel]
+      unless channel[program.channel]
+        channel[program.channel] = true
+        @fresh[program.channel] = epg_updater.fresh[program.channel] || @fresh[program.channel]
+      end
     }
 
     new_program_list = []
@@ -205,22 +210,29 @@ class EPGFromNull
   def program_list
     []
   end
+  
+  def fresh
+    {}
+  end
 end
 
 class EPGFromFile
   attr_reader :channel_list
   attr_reader :program_list
+  attr_reader :fresh
 
   def initialize(savedata)
-    epgdata = YAML.load(savedata)
     @program_list = []
+    @channel_list = []
+    @fresh = {}
+
+    epgdata = YAML.load(savedata)
     if epgdata
       @channel_list = epgdata[:channel]
+      @fresh = epgdata[:fresh]
       epgdata[:program].each { |program_a|
         @program_list << Program.new(program_a)
       }
-    else
-      @channel_list = []
     end
   end
 end
@@ -233,11 +245,15 @@ class EPGToFile
       program_a << program.to_a
     }
 
-    {:channel => epg.channel_list, :program => program_a}.to_yaml
+    {:channel => epg.channel_list, :program => program_a, :fresh => epg.fresh}.to_yaml
   end
 end
 
 class EPGFromEpgdump
+  attr_reader :channel_list
+  attr_reader :program_list
+  attr_reader :fresh
+
   def initialize(epgxml)
     epgdata = REXML::Document.new epgxml
 
@@ -257,14 +273,9 @@ class EPGFromEpgdump
         :stop => EPGFromEpgdump.time_from_epgdump(programme.attribute('stop').to_s)
       )
     }
-  end
 
-  def channel_list
-    @channel_list
-  end
-  
-  def program_list
-    @program_list
+    @fresh = {}
+    # 本当は、epgdump データから fresh 度合いを判定すべき
   end
 
   def EPGFromEpgdump.time_from_epgdump(epgdump_time)
@@ -384,7 +395,7 @@ print "!epgdump file: #{filename}\n"
   def minutely
     load_config
     load_order
-    discovery_epg
+    discovery_epg 60
     save_order
   end
 
@@ -456,7 +467,10 @@ p device
     # FIXME: stderr からログを取得するようにする (特に recpt1)
     # FIXME: それぞれのコマンドが失敗したら false を返すようにする
 
-    EPG.new(EPGFromEpgdump, dump)
+    epg = EPG.new(EPGFromEpgdump, dump)
+    epg.fresh[ch] = Time.now + (60 * 60 * 24) if sec >= 60
+
+    epg
   end
 
   def discovery_epg(slot_num, ch, sec)
