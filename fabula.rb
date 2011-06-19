@@ -17,13 +17,29 @@ class EPG
   end
 
   def update(epg_updater)
+    channel = {}
+    @program_list.each { |program|
+      channel[program.channel] = true unless channel[program.channel]
+    }
+    epg_updater.program_list.each { |program|
+      channel[program.channel] = true unless channel[program.channel]
+    }
+
+    new_program_list = []
+	channel.each { |ch, name|
+      new_program_list += update_ch(@program_list.find_all{|program| program.channel == ch} , epg_updater.program_list.find_all{|program| program.channel == ch})
+    }
+    @program_list = new_program_list
+  end
+  
+
+
+  def update_ch(master, updater)
     # epg_updater に含まれている時間の範囲を算出する
 
     cnt_master = 0
     cnt_updater = 0
     new_program_list = []
-    master = @program_list
-    updater = epg_updater.program_list
 
     while master.size > cnt_master || updater.size > cnt_updater
 
@@ -92,7 +108,7 @@ class EPG
 
     end
 
-    @program_list = new_program_list
+    new_program_list
   end
 
   def alert
@@ -342,21 +358,17 @@ class Fabula
       return false
     end
 
-    @channel.each { |ch, name|
-      @epg = EPG.new(EPGFromFile, @order_file.read)
+    @epg = EPG.new(EPGFromFile, @order_file.read)
     #rescue
     #  print "-------- error\n"
     #  p $!
     #  print "-------- error\n"
     #end
-    }
   end
 
   def save_order
     @order_file.rewind
-    @channel.each { |ch, name|
-      @order_file << EPGToFile.to_yaml(@epg)
-    }
+    @order_file << EPGToFile.to_yaml(@epg)
     @order_file.close
     @order_file = nil
   end
@@ -456,7 +468,6 @@ print "----discovery\n"
 
     epg
   end
-
 end
 
 class ControlList
@@ -507,6 +518,8 @@ end
 # program_list = epg.program_list.map { |program| cl.program_mapper(program)}
 # FIXME map! に動作をかえる？
 
+if $0 == __FILE__
+  fabula = Fabula.new
+  fabula.minutely
+end
 
-fabula = Fabula.new
-#fabula.minutely

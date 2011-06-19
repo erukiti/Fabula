@@ -55,6 +55,7 @@ class DummyEPG
     opt.each { |data|
       @program_list << Program.new(data)
     }
+
   end
 
   def channel_list
@@ -81,12 +82,12 @@ class TC_EPG < Test::Unit::TestCase
   def test_update
     #
     epg = EPG.new(DummyEPG, [
-      {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
+      {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
     ])
     epg2 = EPG.new(DummyEPG, [
-      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :ch => "C39"},
-      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
-      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
+      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :channel => "C39"},
+      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
+      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :channel => "C39"},
     ])
 
     epg.update(epg2)
@@ -98,14 +99,15 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list.find{ |a| a.title == "C3"}.start, Time.local(2011, 6, 15, 10, 0))
     assert_equal(epg.program_list.find{ |a| a.title == "C3"}.stop, Time.local(2011, 6, 15, 10, 30))
 
+if true
     #チャンネル違いへの対応
     epg = EPG.new(DummyEPG, [
-      {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C47"},
+      {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C47"},
     ])
     epg2 = EPG.new(DummyEPG, [
-      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :ch => "C39"},
-      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
-      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
+      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :channel => "C39"},
+      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
+      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :channel => "C39"},
     ])
 
     epg.update(epg2)
@@ -118,14 +120,15 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list.find{ |a| a.title == "C2"}.start, Time.local(2011, 6, 14, 23, 30))
     assert_equal(epg.program_list.find{ |a| a.title == "C3"}.start, Time.local(2011, 6, 15, 10, 0))
     assert_equal(epg.program_list.find{ |a| a.title == "C3"}.stop, Time.local(2011, 6, 15, 10, 30))
+end
 
     epg = EPG.new(DummyEPG, [
-      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :ch => "C39"},
-      {:title => 'M2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
-      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
+      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :channel => "C39"},
+      {:title => 'M2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
+      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :channel => "C39"},
     ])
     epg2 = EPG.new(DummyEPG, [
-      {:title => 'C0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
+      {:title => 'C0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
     ])
 
     epg.update(epg2)
@@ -141,35 +144,35 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list[2].stop,  Time.local(2011, 6, 15, 10, 30))
 
     epg = EPG.new(DummyEPG, [
-      {:title => 'M0',  :start => Time.local(2011, 6, 14, 22, 0),  :stop => Time.local(2011, 6, 14, 23, 00), :ch => "C39"},
-      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 15, 0, 50), :ch => "C39"},
-      {:title => 'M2',  :start => Time.local(2011, 6, 15, 9, 0),  :stop => Time.local(2011, 6, 15, 10, 0), :ch => "C39"},
-      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
-      {:title => 'M4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 10, 45), :ch => "C39"},
-      {:title => 'M5',  :start => Time.local(2011, 6, 15, 10, 45), :stop => Time.local(2011, 6, 15, 11, 0), :ch => "C39"},
-      {:title => 'M6',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 30), :ch => "C39"},
-      {:title => 'M7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 12, 30), :ch => "C39"},
-      {:title => 'M8',  :start => Time.local(2011, 6, 15, 12, 30), :stop => Time.local(2011, 6, 15, 13, 30), :ch => "C39"},
-      {:title => 'M9',  :start => Time.local(2011, 6, 15, 13, 30), :stop => Time.local(2011, 6, 15, 14, 5), :ch => "C39"},
-      {:title => 'M10',  :start => Time.local(2011, 6, 15, 14, 5),  :stop => Time.local(2011, 6, 15, 14, 10), :ch => "C39"},
-      {:title => 'M11', :start => Time.local(2011, 6, 15, 14, 10), :stop => Time.local(2011, 6, 15, 14, 30), :ch => "C39"},
-      {:title => 'M12', :start => Time.local(2011, 6, 15, 14, 45), :stop => Time.local(2011, 6, 15, 15, 0), :ch => "C39"},
-      {:title => 'M13', :start => Time.local(2011, 6, 15, 15, 0), :stop => Time.local(2011, 6, 15, 16, 0), :ch => "C39"},
+      {:title => 'M0',  :start => Time.local(2011, 6, 14, 22, 0),  :stop => Time.local(2011, 6, 14, 23, 00), :channel => "C39"},
+      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 15, 0, 50), :channel => "C39"},
+      {:title => 'M2',  :start => Time.local(2011, 6, 15, 9, 0),  :stop => Time.local(2011, 6, 15, 10, 0), :channel => "C39"},
+      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :channel => "C39"},
+      {:title => 'M4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 10, 45), :channel => "C39"},
+      {:title => 'M5',  :start => Time.local(2011, 6, 15, 10, 45), :stop => Time.local(2011, 6, 15, 11, 0), :channel => "C39"},
+      {:title => 'M6',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 30), :channel => "C39"},
+      {:title => 'M7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 12, 30), :channel => "C39"},
+      {:title => 'M8',  :start => Time.local(2011, 6, 15, 12, 30), :stop => Time.local(2011, 6, 15, 13, 30), :channel => "C39"},
+      {:title => 'M9',  :start => Time.local(2011, 6, 15, 13, 30), :stop => Time.local(2011, 6, 15, 14, 5), :channel => "C39"},
+      {:title => 'M10',  :start => Time.local(2011, 6, 15, 14, 5),  :stop => Time.local(2011, 6, 15, 14, 10), :channel => "C39"},
+      {:title => 'M11', :start => Time.local(2011, 6, 15, 14, 10), :stop => Time.local(2011, 6, 15, 14, 30), :channel => "C39"},
+      {:title => 'M12', :start => Time.local(2011, 6, 15, 14, 45), :stop => Time.local(2011, 6, 15, 15, 0), :channel => "C39"},
+      {:title => 'M13', :start => Time.local(2011, 6, 15, 15, 0), :stop => Time.local(2011, 6, 15, 16, 0), :channel => "C39"},
     ])
     epg2 = EPG.new(DummyEPG, [
-      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :ch => "C39"},
-      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
-      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
-      {:title => 'C4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 11, 0), :ch => "C39"},
-      {:title => 'C5',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 15), :ch => "C39"},
-      {:title => 'C6',  :start => Time.local(2011, 6, 15, 11, 15), :stop => Time.local(2011, 6, 15, 11, 30), :ch => "C39"},
-      {:title => 'C7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 11, 35), :ch => "C39"},
-      {:title => 'C8',  :start => Time.local(2011, 6, 15, 11, 35), :stop => Time.local(2011, 6, 15, 12, 0), :ch => "C39"},
-      {:title => 'C9',  :start => Time.local(2011, 6, 15, 12, 0),  :stop => Time.local(2011, 6, 15, 13, 0), :ch => "C39"},
-      {:title => 'C10', :start => Time.local(2011, 6, 15, 13, 0),  :stop => Time.local(2011, 6, 15, 14, 0), :ch => "C39"},
-      {:title => 'C11', :start => Time.local(2011, 6, 15, 14, 0),  :stop => Time.local(2011, 6, 15, 14, 10), :ch => "C39"},
-      {:title => 'C12', :start => Time.local(2011, 6, 15, 14, 15), :stop => Time.local(2011, 6, 15, 14, 30), :ch => "C39"},
-      {:title => 'C13', :start => Time.local(2011, 6, 15, 14, 30), :stop => Time.local(2011, 6, 15, 15, 0), :ch => "C39"},
+      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :channel => "C39"},
+      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
+      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :channel => "C39"},
+      {:title => 'C4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 11, 0), :channel => "C39"},
+      {:title => 'C5',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 15), :channel => "C39"},
+      {:title => 'C6',  :start => Time.local(2011, 6, 15, 11, 15), :stop => Time.local(2011, 6, 15, 11, 30), :channel => "C39"},
+      {:title => 'C7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 11, 35), :channel => "C39"},
+      {:title => 'C8',  :start => Time.local(2011, 6, 15, 11, 35), :stop => Time.local(2011, 6, 15, 12, 0), :channel => "C39"},
+      {:title => 'C9',  :start => Time.local(2011, 6, 15, 12, 0),  :stop => Time.local(2011, 6, 15, 13, 0), :channel => "C39"},
+      {:title => 'C10', :start => Time.local(2011, 6, 15, 13, 0),  :stop => Time.local(2011, 6, 15, 14, 0), :channel => "C39"},
+      {:title => 'C11', :start => Time.local(2011, 6, 15, 14, 0),  :stop => Time.local(2011, 6, 15, 14, 10), :channel => "C39"},
+      {:title => 'C12', :start => Time.local(2011, 6, 15, 14, 15), :stop => Time.local(2011, 6, 15, 14, 30), :channel => "C39"},
+      {:title => 'C13', :start => Time.local(2011, 6, 15, 14, 30), :stop => Time.local(2011, 6, 15, 15, 0), :channel => "C39"},
     ])
 
     epg.update(epg2)
@@ -487,7 +490,7 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
     assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
 
-    # 
+    # スロット一つ。必ず 3 がコンフリクトになるケース
     epg = EPG.new(DummyEPG, [
       {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39', :priority => 1},
       {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39', :priority => 1},
@@ -500,7 +503,7 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
     assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, true)
 
-    #
+    # スロット一つ、必ず3 と、2 or 4 がコンフリクトになるケース (2が先)
     epg = EPG.new(DummyEPG, [
       {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
       {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39' ,:priority => 1},
@@ -511,9 +514,48 @@ class TC_EPG < Test::Unit::TestCase
     epg.resolve_conflict 1
     assert_equal(epg.conflict?, true)
     assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
-    assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
     assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, true)
-    assert_equal(epg.program_list.find{ |a| a.title == "4"}.conflict, true)
+    c2 = epg.program_list.find{ |a| a.title == "2"}.conflict
+    c4 = epg.program_list.find{ |a| a.title == "4"}.conflict
+    assert_equal(c2 || c4 , true)
+    assert_equal(c2 && c4 , false)
+
+    # スロット一つ、必ず3 と、2 or 4 がコンフリクトになるケース (4が先)
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C37' ,:priority => 1},
+      {:title => "3", :start => Time.local(2011,6, 3, 3,  5), :stop => Time.local(2011, 6, 3, 3, 20), :channel => 'C38' ,:priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39' ,:priority => 1},
+    ])
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, true)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, true)
+    c2 = epg.program_list.find{ |a| a.title == "2"}.conflict
+    c4 = epg.program_list.find{ |a| a.title == "4"}.conflict
+    assert_equal(c2 || c4 , true)
+    assert_equal(c2 && c4 , false)
+
+    # スロット一つ、必ず3 と、2 or 4 がコンフリクトになるケース (update により merge したデータの場合)
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39' ,:priority => 1},
+    ])
+    epg2 = EPG.new(DummyEPG, [
+      {:title => "3", :start => Time.local(2011,6, 3, 3,  5), :stop => Time.local(2011, 6, 3, 3, 20), :channel => 'C38' ,:priority => 1},
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C37' ,:priority => 1},
+    ])
+    epg.update(epg2)
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, true)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, true)
+    c2 = epg.program_list.find{ |a| a.title == "2"}.conflict
+    c4 = epg.program_list.find{ |a| a.title == "4"}.conflict
+    assert_equal(c2 || c4 , true)
+    assert_equal(c2 && c4 , false)
 
     #
     epg = EPG.new(DummyEPG, [
@@ -539,7 +581,10 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
     assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
     assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, false)
-    assert_equal(epg.program_list.find{ |a| a.title == "4"}.conflict, true)
+    c2 = epg.program_list.find{ |a| a.title == "2"}.conflict
+    c4 = epg.program_list.find{ |a| a.title == "4"}.conflict
+    assert_equal(c2 || c4 , true)
+    assert_equal(c2 && c4 , false)
     assert_not_equal(epg.program_list.find{ |a| a.title == "2"}.slot, epg.program_list.find{ |a| a.title == "3"}.slot)
 
     #
