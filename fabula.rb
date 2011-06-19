@@ -305,11 +305,11 @@ class Fabula
   attr_reader :epg
 
   def initialize()
-    @channel = []
-#    @epg = []
+    @channel = {}
     @epg = EPG.new(EPGFromNull)
     @accessor = FabulaAccessor.new
     @temporary = nil
+    @order_file = nil
   end
 
   def injection_accessor(accessor, opt)
@@ -319,51 +319,46 @@ class Fabula
   def injection_config(config)
     @channel = config[:channel]
     @temporary = config[:temporary]
-
-#    init_epg
+    #slot 
   end
 
   def load_config
     # FIXME: ファイルがないときの処理
     config_data = YAML.load(IO.read('.config.yaml'))
     @channel = config_data[:channel]
-    @accessor.temporary = config_data[:temporary]
+    @accessor.set_config(config_data)
     # FIXME: temporary directory 処理
-
-#    init_epg
   end
-
-  def init_epg
-    @channel.each { |ch, name|
-      @epg[ch] = EPG.new(EPGFromNull)
-    }
-  end
-
-
 
   def load_order
     #begin
-      FileUtils.touch('.order.yaml')
+    filename = ".order.yaml"
+    FileUtils.touch(filename)
 
-      @order_file = File.open('.order.yaml', 'r+')
-      unless @order_file.flock(File::LOCK_EX | File::LOCK_NB)
-        # ロックを取得できないので今回の実行は諦める
-        # FIXME: log出力
-        return false
-      end
+    @order_file = File.open(filename, 'r+')
+    unless @order_file.flock(File::LOCK_EX | File::LOCK_NB)
+      # ロックを取得できないので今回の実行は諦める
+      # FIXME: alert
+      return false
+    end
 
+    @channel.each { |ch, name|
       @epg = EPG.new(EPGFromFile, @order_file.read)
     #rescue
     #  print "-------- error\n"
     #  p $!
     #  print "-------- error\n"
-
     #end
+    }
   end
 
   def save_order
     @order_file.rewind
-    @order_file << EPGToFile.to_yaml(epg)
+    @channel.each { |ch, name|
+      @order_file << EPGToFile.to_yaml(@epg)
+    }
+    @order_file.close
+    @order_file = nil
   end
 
   def load_epgdump
@@ -375,15 +370,16 @@ print "!epgdump file: #{filename}\n"
 
 
   def minutely
-#    load_config
-#    load_order
-#    discovery_epg(true) if @epg.program_list.empty?
-#    save_order
+    load_config
+    load_order
+    discovery_epg
+    save_order
   end
 
   def discovery_epg(sec = 3)
+    slot_num = 0 # 0固定
     @channel.each { |ch, name|
-      @epg.update(@accessor.discovery_epg(ch, sec)) # discovery して update を行う
+      @epg.update(@accessor.discovery_epg(slot_num, ch, sec)) # discovery して update を行う
     }
 
   end
@@ -392,7 +388,14 @@ end
 
 class FabulaAccessor
   def initialize
-    
+    @slot = []
+    @temporary = "./tmp"
+
+  end
+
+  def set_config(config_data)
+    @temporary = config_data[:temporary]
+    @slot = config_data[:slot]
   end
 
   def get_filename(ch)
@@ -403,11 +406,38 @@ class FabulaAccessor
     ["#{@temporary}/#{ch}_#{time}.ts", "#{@temporary}/#{ch}_#{time}_epg.xml"]
   end
 
-  def get_epg(ch, sec)
+  def in_slot(num)
+p "-- in slot #{num}"
+
+    lock_name = "#{@temporary}/slot_#{num}"
+    if Dir.mkdir(lock_name)
+      @slot[num]
+    else
+      false
+    end
+  end
+
+  def out_slot(num)
+p "-- out slot #{num}"
+    lock_name = "#{@temporary}/slot_#{num}"
+    Dir.rmdir lock_name
+  end
+
+  def get_epg(slot_num, ch, sec)
+    device = in_slot(slot_num)
+p device
+    unless device
+      p "device busy"
+      return EPG.new(EPGFromNull)
+    end
+
     ts_name, epg_name = get_filename(ch)
     epgtemp_name = "#{epg_name}_progress"
 
-    `recpt1 #{ch} #{sec} #{ts_name}`
+    log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name} 2>&1`
+    # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
+    
+    out_slot(slot_num)
     dump = `epgdump #{ch} #{ts_name} -`
     File.unlink ts_name
 
@@ -417,18 +447,14 @@ class FabulaAccessor
     EPG.new(EPGFromEpgdump, dump)
   end
 
-  def discovery_epg(ch, sec)
+  def discovery_epg(slot_num, ch, sec)
 print "----discovery\n"
     epg = EPG.new(EPGFromNull)
 
-    epg.update(get_epg(ch, sec))
+    epg.update(get_epg(slot_num, ch, sec))
       # FIXME: epg 取得時に失敗した場合何回かリトライしてみる？
 
     epg
-  end
-
-  def temporary=(temporary)
-    @temporary = temporary
   end
 
 end
@@ -482,5 +508,5 @@ end
 # FIXME map! に動作をかえる？
 
 
-#fabula = Fabula.new
+fabula = Fabula.new
 #fabula.minutely

@@ -66,11 +66,11 @@ class DummyAccessor
   def initialize(opt)
     @epg = EPG.new(DummyEPG, opt)
   end
-  def get_epg(ch, is_short)
+  def get_epg(slot_num, ch, is_short)
     @epg if ch == 'C39'
   end
-  def discovery_epg(ch, sec)
-    @epg.update(get_epg(ch, sec))
+  def discovery_epg(slot_num, ch, sec)
+    @epg.update(get_epg(slot_num, ch, sec))
       # FIXME: epg 取得時に失敗した場合何回かリトライしてみる？
 
     @epg
@@ -79,34 +79,53 @@ end
 
 class TC_EPG < Test::Unit::TestCase
   def test_update
+    #
     epg = EPG.new(DummyEPG, [
-      {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
+      {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
     ])
     epg2 = EPG.new(DummyEPG, [
-      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30)},
-      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
-      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30)},
+      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :ch => "C39"},
+      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
+      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
     ])
 
     epg.update(epg2)
     assert_equal(epg.program_list.size, 3)
-    assert_equal(epg.program_list[0].title, 'C1')
-    assert_equal(epg.program_list[1].title, 'M0')
-    assert_equal(epg.program_list[2].title, 'C3')
-    assert_equal(epg.program_list[0].start, Time.local(2011, 6, 14, 23, 0))
-    assert_equal(epg.program_list[0].stop,  Time.local(2011, 6, 14, 23, 30))
-    assert_equal(epg.program_list[1].start, Time.local(2011, 6, 14, 23, 30))
-    assert_equal(epg.program_list[1].stop,  Time.local(2011, 6, 15, 0, 0))
-    assert_equal(epg.program_list[2].start, Time.local(2011, 6, 15, 10, 0))
-    assert_equal(epg.program_list[2].stop,  Time.local(2011, 6, 15, 10, 30))
+    assert_equal(epg.program_list.find{ |a| a.title == "C1"}.start, Time.local(2011, 6, 14, 23, 0))
+    assert_equal(epg.program_list.find{ |a| a.title == "C1"}.stop, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list.find{ |a| a.title == "M0"}.start, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list.find{ |a| a.title == "M0"}.stop, Time.local(2011, 6, 15, 0, 0))
+    assert_equal(epg.program_list.find{ |a| a.title == "C3"}.start, Time.local(2011, 6, 15, 10, 0))
+    assert_equal(epg.program_list.find{ |a| a.title == "C3"}.stop, Time.local(2011, 6, 15, 10, 30))
 
+    #チャンネル違いへの対応
     epg = EPG.new(DummyEPG, [
-      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30)},
-      {:title => 'M2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
-      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30)},
+      {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C47"},
     ])
     epg2 = EPG.new(DummyEPG, [
-      {:title => 'C0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
+      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :ch => "C39"},
+      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
+      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
+    ])
+
+    epg.update(epg2)
+    assert_equal(epg.program_list.size, 4)
+    assert_equal(epg.program_list.find{ |a| a.title == "M0"}.start, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list.find{ |a| a.title == "M0"}.stop, Time.local(2011, 6, 15, 0, 0))
+    assert_equal(epg.program_list.find{ |a| a.title == "C1"}.start, Time.local(2011, 6, 14, 23, 0))
+    assert_equal(epg.program_list.find{ |a| a.title == "C1"}.stop, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list.find{ |a| a.title == "C2"}.start, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list.find{ |a| a.title == "C2"}.start, Time.local(2011, 6, 14, 23, 30))
+    assert_equal(epg.program_list.find{ |a| a.title == "C3"}.start, Time.local(2011, 6, 15, 10, 0))
+    assert_equal(epg.program_list.find{ |a| a.title == "C3"}.stop, Time.local(2011, 6, 15, 10, 30))
+
+    epg = EPG.new(DummyEPG, [
+      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :ch => "C39"},
+      {:title => 'M2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
+      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
+    ])
+    epg2 = EPG.new(DummyEPG, [
+      {:title => 'C0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
     ])
 
     epg.update(epg2)
@@ -122,35 +141,35 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list[2].stop,  Time.local(2011, 6, 15, 10, 30))
 
     epg = EPG.new(DummyEPG, [
-      {:title => 'M0',  :start => Time.local(2011, 6, 14, 22, 0),  :stop => Time.local(2011, 6, 14, 23, 00)},
-      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 15, 0, 50)},
-      {:title => 'M2',  :start => Time.local(2011, 6, 15, 9, 0),  :stop => Time.local(2011, 6, 15, 10, 0)},
-      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30)},
-      {:title => 'M4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 10, 45)},
-      {:title => 'M5',  :start => Time.local(2011, 6, 15, 10, 45), :stop => Time.local(2011, 6, 15, 11, 0)},
-      {:title => 'M6',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 30)},
-      {:title => 'M7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 12, 30)},
-      {:title => 'M8',  :start => Time.local(2011, 6, 15, 12, 30), :stop => Time.local(2011, 6, 15, 13, 30)},
-      {:title => 'M9',  :start => Time.local(2011, 6, 15, 13, 30), :stop => Time.local(2011, 6, 15, 14, 5)},
-      {:title => 'M10',  :start => Time.local(2011, 6, 15, 14, 5),  :stop => Time.local(2011, 6, 15, 14, 10)},
-      {:title => 'M11', :start => Time.local(2011, 6, 15, 14, 10), :stop => Time.local(2011, 6, 15, 14, 30)},
-      {:title => 'M12', :start => Time.local(2011, 6, 15, 14, 45), :stop => Time.local(2011, 6, 15, 15, 0)},
-      {:title => 'M13', :start => Time.local(2011, 6, 15, 15, 0), :stop => Time.local(2011, 6, 15, 16, 0)},
+      {:title => 'M0',  :start => Time.local(2011, 6, 14, 22, 0),  :stop => Time.local(2011, 6, 14, 23, 00), :ch => "C39"},
+      {:title => 'M1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 15, 0, 50), :ch => "C39"},
+      {:title => 'M2',  :start => Time.local(2011, 6, 15, 9, 0),  :stop => Time.local(2011, 6, 15, 10, 0), :ch => "C39"},
+      {:title => 'M3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
+      {:title => 'M4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 10, 45), :ch => "C39"},
+      {:title => 'M5',  :start => Time.local(2011, 6, 15, 10, 45), :stop => Time.local(2011, 6, 15, 11, 0), :ch => "C39"},
+      {:title => 'M6',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 30), :ch => "C39"},
+      {:title => 'M7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 12, 30), :ch => "C39"},
+      {:title => 'M8',  :start => Time.local(2011, 6, 15, 12, 30), :stop => Time.local(2011, 6, 15, 13, 30), :ch => "C39"},
+      {:title => 'M9',  :start => Time.local(2011, 6, 15, 13, 30), :stop => Time.local(2011, 6, 15, 14, 5), :ch => "C39"},
+      {:title => 'M10',  :start => Time.local(2011, 6, 15, 14, 5),  :stop => Time.local(2011, 6, 15, 14, 10), :ch => "C39"},
+      {:title => 'M11', :start => Time.local(2011, 6, 15, 14, 10), :stop => Time.local(2011, 6, 15, 14, 30), :ch => "C39"},
+      {:title => 'M12', :start => Time.local(2011, 6, 15, 14, 45), :stop => Time.local(2011, 6, 15, 15, 0), :ch => "C39"},
+      {:title => 'M13', :start => Time.local(2011, 6, 15, 15, 0), :stop => Time.local(2011, 6, 15, 16, 0), :ch => "C39"},
     ])
     epg2 = EPG.new(DummyEPG, [
-      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30)},
-      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0)},
-      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30)},
-      {:title => 'C4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 11, 0)},
-      {:title => 'C5',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 15)},
-      {:title => 'C6',  :start => Time.local(2011, 6, 15, 11, 15), :stop => Time.local(2011, 6, 15, 11, 30)},
-      {:title => 'C7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 11, 35)},
-      {:title => 'C8',  :start => Time.local(2011, 6, 15, 11, 35), :stop => Time.local(2011, 6, 15, 12, 0)},
-      {:title => 'C9',  :start => Time.local(2011, 6, 15, 12, 0),  :stop => Time.local(2011, 6, 15, 13, 0)},
-      {:title => 'C10', :start => Time.local(2011, 6, 15, 13, 0),  :stop => Time.local(2011, 6, 15, 14, 0)},
-      {:title => 'C11', :start => Time.local(2011, 6, 15, 14, 0),  :stop => Time.local(2011, 6, 15, 14, 10)},
-      {:title => 'C12', :start => Time.local(2011, 6, 15, 14, 15), :stop => Time.local(2011, 6, 15, 14, 30)},
-      {:title => 'C13', :start => Time.local(2011, 6, 15, 14, 30), :stop => Time.local(2011, 6, 15, 15, 0)},
+      {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :ch => "C39"},
+      {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :ch => "C39"},
+      {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :ch => "C39"},
+      {:title => 'C4',  :start => Time.local(2011, 6, 15, 10, 30), :stop => Time.local(2011, 6, 15, 11, 0), :ch => "C39"},
+      {:title => 'C5',  :start => Time.local(2011, 6, 15, 11, 0),  :stop => Time.local(2011, 6, 15, 11, 15), :ch => "C39"},
+      {:title => 'C6',  :start => Time.local(2011, 6, 15, 11, 15), :stop => Time.local(2011, 6, 15, 11, 30), :ch => "C39"},
+      {:title => 'C7',  :start => Time.local(2011, 6, 15, 11, 30), :stop => Time.local(2011, 6, 15, 11, 35), :ch => "C39"},
+      {:title => 'C8',  :start => Time.local(2011, 6, 15, 11, 35), :stop => Time.local(2011, 6, 15, 12, 0), :ch => "C39"},
+      {:title => 'C9',  :start => Time.local(2011, 6, 15, 12, 0),  :stop => Time.local(2011, 6, 15, 13, 0), :ch => "C39"},
+      {:title => 'C10', :start => Time.local(2011, 6, 15, 13, 0),  :stop => Time.local(2011, 6, 15, 14, 0), :ch => "C39"},
+      {:title => 'C11', :start => Time.local(2011, 6, 15, 14, 0),  :stop => Time.local(2011, 6, 15, 14, 10), :ch => "C39"},
+      {:title => 'C12', :start => Time.local(2011, 6, 15, 14, 15), :stop => Time.local(2011, 6, 15, 14, 30), :ch => "C39"},
+      {:title => 'C13', :start => Time.local(2011, 6, 15, 14, 30), :stop => Time.local(2011, 6, 15, 15, 0), :ch => "C39"},
     ])
 
     epg.update(epg2)
