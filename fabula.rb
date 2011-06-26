@@ -14,8 +14,9 @@ class EPG
   def initialize(initializer, opt = nil)
     init = initializer.new(opt)
     @program_list = init.program_list
-    @alert = []
+    @channel_list = init.channel_list
     @fresh = init.fresh
+    @alert = []
   end
 
   def update(epg_updater)
@@ -36,8 +37,6 @@ class EPG
     }
     @program_list = new_program_list
   end
-  
-
 
   def update_ch(master, updater)
     # epg_updater に含まれている時間の範囲を算出する
@@ -197,6 +196,13 @@ class EPG
 
   end
 
+  def auto_discovery
+    @channel_list.each { |ch, name|
+      next if @fresh[ch] && Time.now < @fresh[ch]
+      @program_list << Program.new(:title => "EPG取得", :start => Time.now, :stop => Time.now + 60, :channel => ch, :epgdump => true)
+    }
+  end
+
 end
 
 class EPGFromNull
@@ -294,6 +300,7 @@ class Program
   attr_reader :category
   attr_reader :start
   attr_reader :stop
+  attr_reader :epgdump
 
   attr_accessor :slot
   attr_accessor :conflict
@@ -306,6 +313,7 @@ class Program
     @category = data[:category]
     @start = data[:start]
     @stop = data[:stop]
+    @epgdump = data[:epgdump]
 
     @slot = nil
     @conflict = false
@@ -390,15 +398,15 @@ print "!epgdump file: #{filename}\n"
     }
   end
 
-
-
   def minutely
     load_config
     load_order
-    discovery_epg 60
+    discovery_epg 3
+    @epg.auto_discovery
     save_order
   end
 
+  # EPG クラスに移す？
   def discovery_epg(sec = 3)
     slot_num = 0 # 0固定
     @channel.each { |ch, name|
@@ -468,7 +476,8 @@ p device
     # FIXME: それぞれのコマンドが失敗したら false を返すようにする
 
     epg = EPG.new(EPGFromEpgdump, dump)
-    epg.fresh[ch] = Time.now + (60 * 60 * 24) if sec >= 60
+    epg.fresh[ch] = sec >= 60 ? Time.now + (60 * 60 * 24) : Time.now
+p epg.fresh[ch]
 
     epg
   end

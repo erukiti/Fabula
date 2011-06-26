@@ -49,20 +49,27 @@ end
 
 class DummyEPG
   attr_reader :program_list
+  attr_reader :channel_list
+  attr_reader :fresh
 
   def initialize(opt)
     @program_list = []
+    @channel_list = {}
+    @fresh = {}
     opt.each { |data|
-      @program_list << Program.new(data)
+      if data[:fresh]
+        @fresh[data[:channel]] = data[:fresh]
+        next
+      end
+
+      program = Program.new(data)
+      @program_list << program
+
+      @channel_list["C39"] = "テレビ東京１" if program.channel == "C39"
+      @channel_list["C47"] = "東京ＭＸ" if program.channel == "C47"
     }
 
-  end
-
-  def channel_list
-    {"C39"=>"テレビ東京１"}
-  end
-  def fresh
-    {}
+    @channel_list["C39"] = "テレビ東京１" if @channel_list.size == 0
   end
 end
 
@@ -602,9 +609,68 @@ end
     assert_not_equal(epg.program_list.find{ |a| a.title == "2"}.slot, epg.program_list.find{ |a| a.title == "3"}.slot)
     assert_not_equal(epg.program_list.find{ |a| a.title == "3"}.slot, epg.program_list.find{ |a| a.title == "4"}.slot)
     assert_not_equal(epg.program_list.find{ |a| a.title == "2"}.slot, epg.program_list.find{ |a| a.title == "4"}.slot)
+  end
 
+  def test_auto_dicovery
+    epg = EPG.new(DummyEPG, [
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C39' ,:priority => 1},
+    ])
+    epg.auto_discovery
+    assert_not_nil(epg.program_list.find{ |a| a.epgdump})
+    assert_equal(epg.program_list.find_all{ |a| a.epgdump}.size, 1);
+    assert_equal(epg.program_list.find{ |a| a.epgdump}.title, "EPG取得")
+    assert_equal(epg.program_list.find{ |a| a.epgdump}.channel, "C39")
+    assert_instance_of(Time, epg.program_list.find{ |a| a.epgdump}.start)
+    assert_instance_of(Time, epg.program_list.find{ |a| a.epgdump}.stop)
+
+    epg = EPG.new(DummyEPG, [
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C47' ,:priority => 1},
+    ])
+    epg.auto_discovery
+    assert_not_nil(epg.program_list.find{ |a| a.epgdump})
+    assert_equal(epg.program_list.find{ |a| a.epgdump}.title, "EPG取得")
+    assert_equal(epg.program_list.find{ |a| a.epgdump}.channel, "C47")
+    assert_equal(epg.program_list.find_all{ |a| a.epgdump}.size, 1);
+    assert_instance_of(Time, epg.program_list.find{ |a| a.epgdump}.start)
+    assert_instance_of(Time, epg.program_list.find{ |a| a.epgdump}.stop)
+
+    epg = EPG.new(DummyEPG, [
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C39' ,:priority => 1},
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C47' ,:priority => 1},
+    ])
+    epg.auto_discovery
+    assert_not_nil(epg.program_list.find{ |a| a.epgdump})
+    assert_equal(epg.program_list.find_all{ |a| a.epgdump}.size, 2);
+    assert_equal(epg.program_list.find{ |a| a.epgdump && a.channel == "C47"}.title, "EPG取得")
+    assert_equal(epg.program_list.find{ |a| a.epgdump && a.channel == "C39"}.title, "EPG取得")
+
+    epg = EPG.new(DummyEPG, [
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C39' ,:priority => 1},
+      {:fresh => Time.now + (60 * 60 * 24), :channel => "C39"}
+    ])
+    epg.auto_discovery
+    assert_nil(epg.program_list.find{ |a| a.epgdump})
+
+    epg = EPG.new(DummyEPG, [
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C47' ,:priority => 1},
+      {:fresh => Time.now + (60 * 60 * 24), :channel => "C39"}
+    ])
+    epg.auto_discovery
+    assert_not_nil(epg.program_list.find{ |a| a.epgdump})
+    assert_equal(epg.program_list.find_all{ |a| a.epgdump}.size, 1);
+    assert_equal(epg.program_list.find{ |a| a.epgdump}.channel, "C47")
+
+    epg = EPG.new(DummyEPG, [
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C39' ,:priority => 1},
+      {:fresh => Time.now - 1, :channel => "C39"}
+    ])
+    epg.auto_discovery
+    assert_not_nil(epg.program_list.find{ |a| a.epgdump})
+    assert_equal(epg.program_list.find_all{ |a| a.epgdump}.size, 1);
+    assert_equal(epg.program_list.find{ |a| a.epgdump}.channel, "C39")
 
   end
+
 end
 
 
