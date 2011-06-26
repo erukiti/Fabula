@@ -288,9 +288,9 @@ class EPGFromEpgdump
       fresh_start = nil
       fresh_end = nil
       @program_list.each { |program|
-        next if ch != program.channel
+        next if ch != program.channel || program.start > Time.now || Time.now > program.stop
 
-        unless fresh_start
+        unless fresh_start 
           fresh_start = program.start 
           fresh_end = program.stop
         else
@@ -299,7 +299,7 @@ class EPGFromEpgdump
         end
       }
 
-      @fresh[ch] = fresh_end if fresh_start < Time.now
+      @fresh[ch] = fresh_end
     }
   end
 
