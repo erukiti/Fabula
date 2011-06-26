@@ -280,8 +280,27 @@ class EPGFromEpgdump
       )
     }
 
+    @program_list.sort! { |a, b| a.start <=> b.start}
+
     @fresh = {}
-    # 本当は、epgdump データから fresh 度合いを判定すべき
+
+    @channel_list.each { |ch, name|
+      fresh_start = nil
+      fresh_end = nil
+      @program_list.each { |program|
+        next if ch != program.channel
+
+        unless fresh_start
+          fresh_start = program.start 
+          fresh_end = program.stop
+        else
+          break if fresh_start && program.start > fresh_end
+          fresh_end = program.stop
+        end
+      }
+
+      @fresh[ch] = fresh_end if fresh_start < Time.now
+    }
   end
 
   def EPGFromEpgdump.time_from_epgdump(epgdump_time)
@@ -477,6 +496,10 @@ p device
 
     epg = EPG.new(EPGFromEpgdump, dump)
     epg.fresh[ch] = sec >= 60 ? Time.now + (60 * 60 * 24) : Time.now
+    # sec が短い場合は Time -1 を設定する
+    # そうじゃない場合は、fresh が 1日を越えてれば 1日までに丸める
+    
+    
 p epg.fresh[ch]
 
     epg

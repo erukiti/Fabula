@@ -41,8 +41,84 @@ class TC_EPGFromEpgdump < Test::Unit::TestCase
   </programme>
 </tv>
 EOF
+    # ※このサンプルは fresh 判定の都合上、実時間よりも昔でなければならない
+
     from_epgdump = EPGFromEpgdump.new(dummy_xml)
     assert_equal(from_epgdump.program_list.size, 3)
+    assert_equal(from_epgdump.fresh['C39'], Time.local(2011, 6, 3 , 4, 0))
+
+    dummy_xml = <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+
+<tv generator-info-name="tsEPG2xml" generator-info-url="http://localhost/">
+  <channel id="C39">
+    <display-name lang="ja_JP">テレビ東京１</display-name>
+  </channel>
+  <programme start="20110603024500 +0900" stop="20110603031500 +0900" channel="C39">
+    <title lang="ja_JP">まりあほりっくあらいぶ</title>
+    <desc lang="ja_JP">「早熟の婚約者」 ちょっと待って！私が主人公なのよっ！なのに…なのにこんな扱いって無いんじゃないっ！？んっ。しかもこのちんちくりん、私のこと無視しよった！</desc>
+    <category lang="ja_JP">アニメ・特撮</category>
+    <category lang="en">anime</category>
+  </programme>
+  <programme start="20110603031500 +0900" stop="20110703033000 +0900" channel="C39">
+    <title lang="ja_JP">Ａ×Ａ</title>
+    <desc lang="ja_JP">（ダブルエー）「フィギュアスケートＪａｐａｎ　Ｏｐｅｎ２０１１」 国と地域の威信をかけて頂点を目指すチーム戦！「フィギュアスケートＪａｐａｎ　Ｏｐｅｎ２０１１」をご紹介！日本代表の活躍の歴史を名場面とともに振り返ります！</desc>
+    <category lang="ja_JP">情報</category>
+    <category lang="en">information</category>
+  </programme>
+  <programme start="20110703033030 +0900" stop="20110703040000 +0900" channel="C39">
+    <title lang="ja_JP">続　夏目友人帳第９話</title>
+    <desc lang="ja_JP">「桜並木の彼」 妖（あやかし）を見ることができる少年・夏目貴志と、招き猫の姿をした妖・ニャンコ先生が繰り広げる、妖しく、切なく、そして懐かしい物語。</desc>
+    <category lang="ja_JP">アニメ・特撮</category>
+    <category lang="en">anime</category>
+  </programme>
+</tv>
+EOF
+    # ※このサンプルは fresh 判定の都合上、実時間よりも昔でなければならない
+
+    from_epgdump = EPGFromEpgdump.new(dummy_xml)
+    assert_equal(from_epgdump.program_list.size, 3)
+    assert_equal(from_epgdump.fresh['C39'], Time.local(2011, 7, 3 , 3, 30))
+
+
+    dummy_xml = <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+
+<tv generator-info-name="tsEPG2xml" generator-info-url="http://localhost/">
+  <channel id="C39">
+    <display-name lang="ja_JP">テレビ東京１</display-name>
+  </channel>
+  <programme start="20210603024500 +0900" stop="20210603031500 +0900" channel="C39">
+    <title lang="ja_JP">まりあほりっくあらいぶ</title>
+    <desc lang="ja_JP">「早熟の婚約者」 ちょっと待って！私が主人公なのよっ！なのに…なのにこんな扱いって無いんじゃないっ！？んっ。しかもこのちんちくりん、私のこと無視しよった！</desc>
+    <category lang="ja_JP">アニメ・特撮</category>
+    <category lang="en">anime</category>
+  </programme>
+  <programme start="20210603031500 +0900" stop="20210703033000 +0900" channel="C39">
+    <title lang="ja_JP">Ａ×Ａ</title>
+    <desc lang="ja_JP">（ダブルエー）「フィギュアスケートＪａｐａｎ　Ｏｐｅｎ２０１１」 国と地域の威信をかけて頂点を目指すチーム戦！「フィギュアスケートＪａｐａｎ　Ｏｐｅｎ２０１１」をご紹介！日本代表の活躍の歴史を名場面とともに振り返ります！</desc>
+    <category lang="ja_JP">情報</category>
+    <category lang="en">information</category>
+  </programme>
+  <programme start="20210703033030 +0900" stop="20210703040000 +0900" channel="C39">
+    <title lang="ja_JP">続　夏目友人帳第９話</title>
+    <desc lang="ja_JP">「桜並木の彼」 妖（あやかし）を見ることができる少年・夏目貴志と、招き猫の姿をした妖・ニャンコ先生が繰り広げる、妖しく、切なく、そして懐かしい物語。</desc>
+    <category lang="ja_JP">アニメ・特撮</category>
+    <category lang="en">anime</category>
+  </programme>
+</tv>
+EOF
+    # ※このサンプルは fresh 判定の都合上、実時間よりも後でなければならない
+
+    from_epgdump = EPGFromEpgdump.new(dummy_xml)
+    assert_equal(from_epgdump.program_list.size, 3)
+    assert_equal(from_epgdump.fresh['C39'], nil)
+
+
+
+
   end
 end
 
