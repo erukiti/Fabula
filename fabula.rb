@@ -495,9 +495,11 @@ p device
     # FIXME: それぞれのコマンドが失敗したら false を返すようにする
 
     epg = EPG.new(EPGFromEpgdump, dump)
-    epg.fresh[ch] = sec >= 60 ? Time.now + (60 * 60 * 24) : Time.now
-    # sec が短い場合は Time -1 を設定する
-    # そうじゃない場合は、fresh が 1日を越えてれば 1日までに丸める
+    if sec < 30
+      epg.fresh[ch] = Time.now - 1
+    elsif epg.fresh[ch] > Time.now + (60 * 60 * 24)
+      epg.fresh[ch] = Time.now + (60 * 60 * 24)
+    end
     
     
 p epg.fresh[ch]
