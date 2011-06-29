@@ -444,7 +444,9 @@ print "!epgdump file: #{filename}\n"
 
       if Time.now + (60 * 3) >= program.start
         # 3分前なので録画準備モードに入る
-        @accessor.fork {
+        # 他にも入る為の条件は必要。そうじゃないと、この処理が走る度に fork が走ってしまう
+        # accessor 側で、fork に入るべきかの判定をしてみる？
+        @accessor.fork(program) {
           @accessor.record(program)
         }
         ch_neartime[program.channel] = nil

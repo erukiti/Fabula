@@ -163,10 +163,14 @@ class DummyAccessor
   def get_epg(ch, sec)
     EPG.new(DummyEPG, [{:title => "GETEPG_#{ch}_#{sec}", :channel => ch}])
   end
+  def record(program)
+    "#{program.start} - #{program.stop}: #{program.title} "
+  end
+
   def available_slot
     @opt
   end
-  def fork(&proc)
+  def fork(program = nil, &proc)
     $fork << proc.call
     # FIXME: $fork ってのはさすがにヒドイので別の手段を考える？
   end
@@ -796,9 +800,6 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal($fork.find{ |a| a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
 
     # 録画キューの処理
-
-
-
   end
 
 
