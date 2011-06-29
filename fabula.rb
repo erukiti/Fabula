@@ -172,9 +172,6 @@ class EPG
     # conflict_chunk をそれぞれ解決する
     conflict_chunk_list.each { |conflict_chunk|
       conflict_thread = []
-d "-----"
-d conflict_chunk
-d "-----"
       conflict_chunk.each { |program|
         program.conflict = true
         i = 0
@@ -191,11 +188,6 @@ d "-----"
             break
           else
             for j in 0 ... conflict_thread[i].size
-d program.start
-d program.stop
-d j
-d conflict_thread[i]
-
               if conflict_thread[i][j].stop <= program.start && (j >= conflict_thread[i].size - 1 || program.stop < conflict_thread[i][j+1].start)
                 conflict_thread[i].insert(j + 1, program)
                 program.slot = i
@@ -208,20 +200,12 @@ d conflict_thread[i]
         end while i < device_number && program.conflict
         @conflict_cnt += 1 if program.conflict
       }
-d "===="
-d conflict_thread.size
-d device_number
-d conflict_thread
-d "===="
     }
-    
 
   end
 
   def conflict?
-#p @conflict
     @conflict_cnt > 0
-
   end
 end
 

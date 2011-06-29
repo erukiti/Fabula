@@ -537,8 +537,6 @@ return
   end
 
   def test_resolve
-if false
-
     # 非衝突 (時間連続)
     epg = EPG.new(DummyEPG, [
       {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39', :priority => 1},
@@ -652,7 +650,6 @@ if false
     assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, true)
     assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, false)
     assert_equal(epg.program_list.find{ |a| a.title == "4"}.conflict, true)
-end
 
     # スロット一つ、4, 5 のプライオリティが高いケース (5 は、他と時間帯がずれてるので関係無い
     epg = EPG.new(DummyEPG, [
@@ -671,8 +668,6 @@ end
     assert_equal(epg.program_list.find{ |a| a.title == "4"}.conflict, false)
     assert_equal(epg.program_list.find{ |a| a.title == "5"}.conflict, false)
 
-
-return
     # スロット一つ、必ず3 と、2 or 4 がコンフリクトになるケース (update により merge したデータの場合)
     epg = EPG.new(DummyEPG, [
       {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
