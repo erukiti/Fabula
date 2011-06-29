@@ -7,13 +7,11 @@ require 'fabula.rb'
 
 class TC_EPGFromEpgdump < Test::Unit::TestCase
   def test_time_from_epgdump
-return
     tm = EPGFromEpgdump.time_from_epgdump("20110603024000 +0900")
     assert_equal(tm, Time.mktime(2011, 6, 3, 2, 40, 0))
   end 
 
   def test_initialize
-return
     # 実時間よりもはるかに前のデータの場合
     dummy_xml = <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -178,7 +176,6 @@ end
 
 class TC_EPG < Test::Unit::TestCase
   def test_update
-return
     #
     epg = EPG.new(DummyEPG, [
       {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
@@ -372,7 +369,6 @@ return
   end
 
   def test_program
-return
     # 一応 dummy データに問題がない事を確認
     epg = EPG.new(DummyEPG, [{
       :category => "anime", 
@@ -403,7 +399,6 @@ return
   end
 
   def test_program_map
-return
     epg = EPG.new(DummyEPG, [{
       :category => "anime", 
       :title => "ほげ", 
