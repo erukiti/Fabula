@@ -6,17 +6,39 @@ require 'rexml/document'
 require 'yaml'
 require 'fileutils'
 
+class Array
+  def inspect(indent = 0)
+    buf = "[\n"
+    indent += 2
+    self.each { |node|
+      if node.is_a? Array
+        buf += " " * indent + node.inspect(indent) + "\n"
+      else
+        buf += " " * indent + node.inspect + "\n"
+      end 
+    }
+    indent -= 2
+    buf += " " * indent + "]\n"
+  end
+end
+
+
 class EPG
   attr_reader :program_list
   attr_reader :channel_list
+  attr_reader :last_fresh
   attr_accessor :fresh
+
+  def injection_fresh(ch, time)
+    @last_fresh[ch] = time
+  end
 
   def initialize(initializer, opt = nil)
     init = initializer.new(opt)
     @program_list = init.program_list
     @channel_list = init.channel_list
     @fresh = init.fresh
-    @alert = []
+    @last_fresh = {}
   end
 
   def update(epg_updater)
@@ -27,7 +49,9 @@ class EPG
     epg_updater.program_list.each { |program|
       unless channel[program.channel]
         channel[program.channel] = true
-        @fresh[program.channel] = epg_updater.fresh[program.channel] || @fresh[program.channel]
+        @fresh[program.channel] = epg_updater.fresh[program.channel]
+
+        @last_fresh[program.channel] = Time.now
       end
     }
 
@@ -49,7 +73,7 @@ class EPG
 
       # アップデータ側にしかない
       if master.size == cnt_master || (updater.size > cnt_updater && updater[cnt_updater].stop <= master[cnt_master].start)
-        @alert << "++#{updater[cnt_updater].start} - #{updater[cnt_updater].stop} 「#{updater[cnt_updater].title}」"
+        d "++#{updater[cnt_updater].start} - #{updater[cnt_updater].stop} 「#{updater[cnt_updater].title}」"
 
         new_program_list << updater[cnt_updater]
         cnt_updater += 1
@@ -95,12 +119,12 @@ class EPG
 
       #replace されるので alert を出す
       (replaced_start...cnt_master).each { |cnt|
-        @alert << "- #{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」"
+        d "- #{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」"
       }
 
       #replace を行いつつ、上書き側の alert を出す
       (cnt_start...cnt_updater).each { |cnt|
-        @alert << "+ #{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」"
+        d "+ #{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」"
         new_program_list << updater[cnt]
       }
 
@@ -115,79 +139,83 @@ class EPG
     new_program_list
   end
 
-  def alert
-    @alert
-  end
-
-  def alert_clear
-    @alert = []
-  end
-
-  def resolve_conflict(device_number)
-    channel = {}
-
+  def conflict_chunk_list
     @program_list.sort! { |a, b| a.start <=> b.start }
-    @conflict = []
-    @conflict_cnt = 0
-    may_conflict_cnt = 0
+    conflict = []
 
     i = 0
     begin
-#print "====\n#{i}: #{@program_list[i]['title']}\n"
-#print "#{@program_list[i]['stop']},  #{@program_list[i + 1]['start']}\n"
       next if @program_list[i].stop <= @program_list[i + 1].start
 
-# FIXME: conflict してなおかつチャンネルが矛盾してるデータがないか調べる
-      # confilict している可能性のある塊の検出
-#print "conflict #{i + 1}\n"
-      @conflict[may_conflict_cnt] = [@program_list[i], @program_list[i + 1]]
-      mark = @program_list[i].stop >= @program_list[i + 1].stop ? @program_list[i].stop : @program_list[i + 1].stop 
+      conflict << [@program_list[i], @program_list[i + 1]]
+      stop_mark = @program_list[i].stop >= @program_list[i + 1].stop ? @program_list[i].stop : @program_list[i + 1].stop 
       j = i + 2
       while j <= @program_list.size - 1
-#print "#{j}: #{@program_list[j]['title']}\n"
-#print "#{mark}, #{@program_list[j]['start']}\n"
-        break if mark <= @program_list[j].start
-#print "conflict #{j}\n"
-        @conflict[may_conflict_cnt] << @program_list[j]
-        mark = mark >= @program_list[j].stop ? mark : @program_list[j].stop
+        break if stop_mark <= @program_list[j].start
+        conflict.last << @program_list[j]
+        stop_mark = stop_mark >= @program_list[j].stop ? stop_mark : @program_list[j].stop
         j += 1
       end
-      may_conflict_cnt += 1
-#print "#{j}\n<<<<\n";
+      conflict.last.sort! { |a, b| a.priority == b.priority ? a.start <=> b.start : b.priority <=> a.priority}
       i = j - 1
     ensure 
       i += 1
     end while i < @program_list.size - 2
 
-    return if may_conflict_cnt == 0
+    conflict
+  end
 
-#p @conflict
-    # conflict 解決
-    @conflict.each { |conflict|
-      slot = []
-      conflict.each { |program|
-        is_conflict = true
-#print "++++\n"
-#p program['start']
-        for i in 0 ... device_number
-#print "ch: #{i}\n"
-#print "slot: #{slot[i].inspect}\n"
-          if slot[i] == nil || slot[i] <= program.start
-#print "into: #{i}\n"
-            slot[i] = program.stop
-#print "*slot: #{slot[i].inspect}\n"
-            is_conflict = false
+  def resolve_conflict(device_number)
+    channel = {}
+    @conflict_cnt = 0
+
+    # conflict_chunk をそれぞれ解決する
+    conflict_chunk_list.each { |conflict_chunk|
+      conflict_thread = []
+d "-----"
+d conflict_chunk
+d "-----"
+      conflict_chunk.each { |program|
+        program.conflict = true
+        i = 0
+        begin
+          if conflict_thread[i] == nil
+            conflict_thread[i] = [program]
             program.slot = i
+            program.conflict = false
             break
+          elsif program.stop <= conflict_thread[i].first.start
+            conflict_thread[i].unshift(program)
+            program.slot = i
+            program.conflict = false
+            break
+          else
+            for j in 0 ... conflict_thread[i].size
+d program.start
+d program.stop
+d j
+d conflict_thread[i]
+
+              if conflict_thread[i][j].stop <= program.start && (j >= conflict_thread[i].size - 1 || program.stop < conflict_thread[i][j+1].start)
+                conflict_thread[i].insert(j + 1, program)
+                program.slot = i
+                program.conflict = false
+                break
+              end
+            end
           end
-        end
-        if is_conflict
-#print "conflict: #{program['title']}\n"
-          @conflict_cnt += 1 
-          program.conflict = true
-        end
+          i += 1
+        end while i < device_number && program.conflict
+        @conflict_cnt += 1 if program.conflict
       }
+d "===="
+d conflict_thread.size
+d device_number
+d conflict_thread
+d "===="
     }
+    
+
   end
 
   def conflict?
@@ -195,14 +223,6 @@ class EPG
     @conflict_cnt > 0
 
   end
-
-  def auto_discovery
-    @channel_list.each { |ch, name|
-      next if @fresh[ch] && Time.now < @fresh[ch]
-      @program_list << Program.new(:title => "EPG取得", :start => Time.now, :stop => Time.now + 60, :channel => ch, :epgdump => true)
-    }
-  end
-
 end
 
 class EPGFromNull
@@ -334,9 +354,9 @@ class Program
     @stop = data[:stop]
     @epgdump = data[:epgdump]
 
-    @slot = nil
+    @slot = data[:slot] # ひとまずデバッグ用途以外では使わない
     @conflict = false
-  #  @priority = nil
+    @priority = data[:priority]
   end
 
   def to_a
@@ -349,6 +369,7 @@ class Program
       :stop => @stop,
       :slot => @slot,
       :conflict => @conflict,
+      :priority => @priority
     }
   end
 end
@@ -366,7 +387,7 @@ class Fabula
     @order_file = nil
   end
 
-  def injection_accessor(accessor, opt)
+  def injection_accessor(accessor, opt = nil)
     @accessor = accessor.new(opt)
   end
 
@@ -374,6 +395,10 @@ class Fabula
     @channel = config[:channel]
     @temporary = config[:temporary]
     #slot 
+  end
+
+  def injection_epg(epg)
+    @epg = epg
   end
 
   def load_config
@@ -411,27 +436,66 @@ class Fabula
     @order_file = nil
   end
 
+  def save_queue(epg)
+    epg
+  end
+
+  def load_queue
+  end
+
   def load_epgdump
     Dir.glob("#{@accessor.temporary}/*_epg.xml") { |filename|
 print "!epgdump file: #{filename}\n"
     }
   end
 
-  def minutely
-    load_config
-    load_order
-    discovery_epg 3
-    @epg.auto_discovery
-    save_order
-  end
+  def main
+    # キューを抜き出す
+    # まず切羽詰ってる順にチャンネルを並べる
+    slot_order = []
 
-  # EPG クラスに移す？
-  def discovery_epg(sec = 3)
-    slot_num = 0 # 0固定
+    slots = @accessor.available_slot
+    ch_queue = {}
     @channel.each { |ch, name|
-      @epg.update(@accessor.discovery_epg(slot_num, ch, sec)) # discovery して update を行う
+      ch_queue[ch] = Time.now + (60 * 60 * 4)
+    }
+    @epg.program_list.sort { |a,b| a.start <=> b.start} .each { |program|
+      next unless program.slot
+      ch_queue[program.channel] = program.start if program.start < ch_queue[program.channel]
+      slots = slots.delete_if { |item| program.slot == item && Time.now + (60 * 5) >= program.start }
     }
 
+    is_force_3secmode = (@epg.program_list.size == 0)
+
+    ch_queue.sort{|a, b| a <=> b }.each { |ch, next_at|
+      break if slots.size <= 0
+
+      if is_force_3secmode
+        @accessor.fork() {
+          save_queue(@accessor.get_epg(slots.shift, ch, 60))
+        }
+        next
+      end
+
+      if !@epg.fresh[ch] || @epg.fresh[ch] < Time.now
+        @accessor.fork() {
+          save_queue(@accessor.get_epg(slots.shift, ch, 60))
+        }
+#      elsif (Time.now + 60 * 4 < next_at  && Time.now + 30 > @epg.last_fresh[ch])
+#        @epg.update(@accessor.get_epg(slots.shift, ch, 3))
+      end
+
+    }
+
+#p    Process.waitall
+
+return
+
+#          elsif (Time.now + 30 < next_at      && Time.now + 5 >  @epg.last_fresh[ch]) ||
+#                 ||
+#                                                 Time.now + 60 * 4 > @epg.last_fresh[ch]
+#            @epg.update(@accessor.get_epg(slots.shift, ch, 3))
+#    @epg.auto_discovery
   end
 
 end
@@ -456,15 +520,23 @@ class FabulaAccessor
     ["#{@temporary}/#{ch}_#{time}.ts", "#{@temporary}/#{ch}_#{time}_epg.xml"]
   end
 
+  def available_slot
+    slots = []
+    num = 0
+    @slot.each { |dev|
+      lock_name = "#{@temporary}/slot_#{num}"
+      slots << num unless File.exists?(lock_name)
+      num += 1
+    }
+    slots
+  end
+
+
   def in_slot(num)
 p "-- in slot #{num}"
 
     lock_name = "#{@temporary}/slot_#{num}"
-    if Dir.mkdir(lock_name)
-      @slot[num]
-    else
-      false
-    end
+    Dir.mkdir(lock_name) ? @slot[num] : false
   end
 
   def out_slot(num)
@@ -474,6 +546,7 @@ p "-- out slot #{num}"
   end
 
   def get_epg(slot_num, ch, sec)
+print "----get_epg #{slot_num}, #{ch}, #{sec}\n"
     device = in_slot(slot_num)
 p device
     unless device
@@ -496,23 +569,10 @@ p device
 
     epg = EPG.new(EPGFromEpgdump, dump)
     if sec < 30
-      epg.fresh[ch] = Time.now - 1
+      epg.fresh[ch] = nil
     elsif epg.fresh[ch] > Time.now + (60 * 60 * 24)
       epg.fresh[ch] = Time.now + (60 * 60 * 24)
     end
-    
-    
-p epg.fresh[ch]
-
-    epg
-  end
-
-  def discovery_epg(slot_num, ch, sec)
-print "----discovery\n"
-    epg = EPG.new(EPGFromNull)
-
-    epg.update(get_epg(slot_num, ch, sec))
-      # FIXME: epg 取得時に失敗した場合何回かリトライしてみる？
 
     epg
   end
@@ -563,11 +623,36 @@ class ControlList
 
 end
 
+class Log
+  def Log::output(message, level = "debug")
+    File.open("fabula.log", "a") { |f|
+      if message.is_a? String
+        f << "#{message}\n"
+      else
+        f << "#{message.inspect}\n"
+      end
+      f.flush
+    }
+  end
+end
+
+def d(message, level = "debug")
+  Log::output(message, level)
+end
+
+
+
+
+
 # program_list = epg.program_list.map { |program| cl.program_mapper(program)}
 # FIXME map! に動作をかえる？
 
 if $0 == __FILE__
   fabula = Fabula.new
-  fabula.minutely
+  fabula.load_config
+  fabula.load_order
+  fabula.main
+  fabula.save_order
 end
+
 
