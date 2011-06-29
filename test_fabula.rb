@@ -160,8 +160,8 @@ class DummyAccessor
     @opt = opt
     $fork = []
   end
-  def get_epg(slot_num, ch, sec)
-    EPG.new(DummyEPG, [{:title => "GETEPG_#{ch}_#{sec}", :channel => ch, :slot => slot_num}])
+  def get_epg(ch, sec)
+    EPG.new(DummyEPG, [{:title => "GETEPG_#{ch}_#{sec}", :channel => ch}])
   end
   def available_slot
     @opt
@@ -728,17 +728,15 @@ class TC_EPG < Test::Unit::TestCase
   end
 
   def test_main
-return
-    # 空の状態ならば、全チャンネルに対して 3 秒取得
+    # 空の状態ならば、全チャンネルに対して 60 秒取得
     fabula = Fabula.new
     fabula.injection_config(:channel => {'C39' => 'テレビ東京', 'C47' => '東京ＭＸ'})
     fabula.injection_accessor(DummyAccessor, [0, 1])
     fabula.main
-    epg = fabula.epg
-    assert_equal(epg.program_list.size, 2)
-    assert_equal(epg.program_list.find{ |a| a.channel == 'C39'}.title, "GETEPG_C39_3")
-    assert_equal(epg.program_list.find{ |a| a.channel == 'C47'}.title, "GETEPG_C47_3")
-    assert_not_equal(epg.program_list.find{ |a| a.channel == 'C39'}.slot, epg.program_list.find{ |a| a.channel == 'C47'}.slot)
+
+    assert_equal($fork.size, 2)
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C39'}.program_list[0].title, "GETEPG_C39_60")
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
 
 	# 空じゃなくて、fresh が空
     fabula = Fabula.new
@@ -749,14 +747,10 @@ return
     fabula.injection_config(:channel => {'C39' => 'テレビ東京', 'C47' => '東京ＭＸ'})
     fabula.injection_accessor(DummyAccessor, [0, 1])
     fabula.main
-    epg = fabula.epg
 
-    assert_equal(epg.program_list.size, 1)
-    assert_equal(epg.program_list.find{ |a| a.channel == 'C39'}.title, "4")
-
-    assert_equal($epg.program_list.size, 2)
-    assert_equal($epg.program_list.find{ |a| a.channel == 'C39'}.title, "GETEPG_C39_60")
-    assert_equal($epg.program_list.find{ |a| a.channel == 'C47'}.title, "GETEPG_C47_60")
+    assert_equal($fork.size, 2)
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C39'}.program_list[0].title, "GETEPG_C39_60")
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
 
     # 空じゃなくて、fresh が 古い
     fabula = Fabula.new
@@ -764,57 +758,46 @@ return
       {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C39' ,:priority => 1},
       {:fresh => Time.now - 1, :channel => "C39"}
     ]))
-
     fabula.injection_config(:channel => {'C39' => 'テレビ東京', 'C47' => '東京ＭＸ'})
     fabula.injection_accessor(DummyAccessor, [0, 1])
     fabula.main
-    epg = fabula.epg
 
-    assert_equal(epg.program_list.size, 1)
-    assert_equal(epg.program_list.find{ |a| a.channel == 'C39'}.title, "4")
+    assert_equal($fork.size, 2)
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C39'}.program_list[0].title, "GETEPG_C39_60")
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
 
-    assert_equal($epg.program_list.size, 2)
-    assert_equal($epg.program_list.find{ |a| a.channel == 'C39'}.title, "GETEPG_C39_60")
-    assert_equal($epg.program_list.find{ |a| a.channel == 'C47'}.title, "GETEPG_C47_60")
-
-
-
-
-
-    fabula.get_epg
-    epg = fabula.epg
-    assert_equal(epg.program_list.size, 0)
-
+    # 空じゃなくて fresh がまだで last_fresh が新しい
     fabula = Fabula.new
-    fabula.injection_config(:channel => {'C39' => 'テレビ東京'})
-    fabula.injection_accessor(DummyAccessor, [{
-      :category => "anime", 
-      :title => "ほげ", 
-      :start => Time.local(2011, 6, 3, 2, 45), 
-      :stop => Time.local(2011, 6, 3, 3, 15), 
-      :desc => "ほげですく", 
-      :channel => 'C39'
-    }, {
-      :category => "infomation", 
-      :title => "ふが", 
-      :stop => Time.local(2011, 6, 3, 3, 30), 
-      :start => Time.local(2011, 6, 3, 3, 15), 
-      :desc => "ふがですく", 
-      :channel => 'C39'
-    }])
-    fabula.discovery_epg
-    epg = fabula.epg
-    assert_equal(epg.program_list.size, 2)
-    assert_equal(epg.program_list[0].category, "anime")
-    assert_equal(epg.program_list[0].title, "ほげ")
-    assert_equal(epg.program_list[0].start, Time.local(2011, 6, 3, 2, 45))
-    assert_equal(epg.program_list[0].stop, Time.local(2011, 6, 3, 3, 15))
-    assert_equal(epg.program_list[0].desc, "ほげですく")
-    assert_equal(epg.program_list[0].channel, "C39")
-    assert_equal(epg.program_list[1].category, "infomation")
-    assert_equal(epg.program_list[1].title, "ふが")
-    assert_equal(epg.program_list[1].start, Time.local(2011, 6, 3, 3, 15))
-    assert_equal(epg.program_list[1].stop, Time.local(2011, 6, 3, 3, 30))
+    fabula.injection_epg(EPG.new(DummyEPG, [
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C39' ,:priority => 1},
+      {:fresh => Time.now + 60 * 60, :channel => "C39"}
+    ]))
+    fabula.injection_config(:channel => {'C39' => 'テレビ東京', 'C47' => '東京ＭＸ'})
+    fabula.injection_accessor(DummyAccessor, [0, 1])
+    fabula.epg.injection_lastfresh('C39', Time.now)
+    fabula.main
+
+    assert_equal($fork.size, 1)
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
+
+    # 空じゃなくて fresh がまだで last_fresh が5分以上経過
+    fabula = Fabula.new
+    fabula.injection_epg(EPG.new(DummyEPG, [
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C39' ,:priority => 1},
+      {:fresh => Time.now + 60 * 60, :channel => "C39"}
+    ]))
+    fabula.injection_config(:channel => {'C39' => 'テレビ東京', 'C47' => '東京ＭＸ'})
+    fabula.injection_accessor(DummyAccessor, [0, 1])
+    fabula.epg.injection_lastfresh('C39', Time.now - 60 * 6)
+    fabula.main
+
+    assert_equal($fork.size, 2)
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C39'}.program_list[0].title, "GETEPG_C39_3")
+    assert_equal($fork.find{ |a| a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
+
+    # 録画キューの処理
+
+
 
   end
 

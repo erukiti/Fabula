@@ -29,7 +29,7 @@ class EPG
   attr_reader :last_fresh
   attr_accessor :fresh
 
-  def injection_fresh(ch, time)
+  def injection_lastfresh(ch, time)
     @last_fresh[ch] = time
   end
 
@@ -434,41 +434,45 @@ print "!epgdump file: #{filename}\n"
   end
 
   def main
-    # キューを抜き出す
-    # まず切羽詰ってる順にチャンネルを並べる
-    slot_order = []
-
-    slots = @accessor.available_slot
-    ch_queue = {}
+    # まず切羽詰ってる順に割り出す
+    ch_neartime = {}
     @channel.each { |ch, name|
-      ch_queue[ch] = Time.now + (60 * 60 * 4)
+      ch_neartime[ch] = Time.now + (60 * 60 * 4)
     }
     @epg.program_list.sort { |a,b| a.start <=> b.start} .each { |program|
       next unless program.slot
-      ch_queue[program.channel] = program.start if program.start < ch_queue[program.channel]
-      slots = slots.delete_if { |item| program.slot == item && Time.now + (60 * 5) >= program.start }
+
+      if Time.now + (60 * 3) >= program.start
+        # 3分前なので録画準備モードに入る
+        @accessor.fork {
+          @accessor.record(program)
+        }
+        ch_neartime[program.channel] = nil
+      elsif Time.now + (60 * 5) >= program.start
+        # 5分以内の場合でも安全の為に EPG 取得モードには入らないようにする
+        ch_neartime[program.channel] = nil
+        @accessor.reserve_slot(program.slot)
+      else
+        ch_neartime[program.channel] = program.start if program.start < ch_neartime[program.channel]
+      end
     }
 
-    is_force_3secmode = (@epg.program_list.size == 0)
+    ch_neartime.sort{|a, b| a <=> b }.each { |ch, next_at|
+      # 切羽詰まってる順で EPG 取得処理を行う
 
-    ch_queue.sort{|a, b| a <=> b }.each { |ch, next_at|
-      break if slots.size <= 0
-
-      if is_force_3secmode
-        @accessor.fork() {
-          save_queue(@accessor.get_epg(slots.shift, ch, 60))
-        }
-        next
-      end
+      # そもそも録画スロットに空きがなければ処理しない
+      break if @accessor.available_slot.size <= 0
 
       if !@epg.fresh[ch] || @epg.fresh[ch] < Time.now
         @accessor.fork() {
-          save_queue(@accessor.get_epg(slots.shift, ch, 60))
+          save_queue(@accessor.get_epg(ch, 60))
+          # fork の中なので update はできない。ファイルとして残す事しかできない
         }
-#      elsif (Time.now + 60 * 4 < next_at  && Time.now + 30 > @epg.last_fresh[ch])
-#        @epg.update(@accessor.get_epg(slots.shift, ch, 3))
+      elsif Time.now > @epg.last_fresh[ch] + 60 * 5
+        @accessor.fork() {
+          save_queue(@accessor.get_epg(ch, 3))
+        }
       end
-
     }
 
 #p    Process.waitall
@@ -529,7 +533,7 @@ p "-- out slot #{num}"
     Dir.rmdir lock_name
   end
 
-  def get_epg(slot_num, ch, sec)
+  def get_epg(ch, sec)
 print "----get_epg #{slot_num}, #{ch}, #{sec}\n"
     device = in_slot(slot_num)
 p device
