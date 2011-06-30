@@ -433,28 +433,49 @@ print "!epgdump file: #{filename}\n"
     }
   end
 
+  def main_loop
+
+    is_record_near = true
+    while is_record_near || @accessor.waitall_non_blocking
+      is_record_near = main
+      sleep(10)
+    end
+
+  end
+
   def main
+    # EPG プログラムリストが空ならば、3秒リフレッシュの準備
+    if @epg.program_list.size == 0
+      @channel.each { |ch, name|
+        @epg.fresh[ch] = Time.now + 60
+        @epg.last_fresh[ch] = Time.now - 60 * 10
+      }
+    end
+
     # まず切羽詰ってる順に割り出す
     ch_neartime = {}
     @channel.each { |ch, name|
       ch_neartime[ch] = Time.now + (60 * 60 * 4)
     }
+	is_record_near = false
+
     @epg.program_list.sort { |a,b| a.start <=> b.start} .each { |program|
       next unless program.slot
       if Time.now >= program.start - 60 * 3 && Time.now < program.stop
         # 3分前なので録画準備モードに入る
         # 他にも入る為の条件は必要。そうじゃないと、この処理が走る度に fork が走ってしまう
         # accessor 側で、fork に入るべきかの判定をしてみる？
-        @accessor.fork(program) {
-          @accessor.record(program)
-        }
+        @accessor.record(program)
         ch_neartime.delete(program.channel)
+        is_record_near = true
       elsif Time.now >= program.start - 60 * 5 && Time.now < program.stop
         # 5分以内の場合でも安全の為に EPG 取得モードには入らないようにする
         ch_neartime.delete(program.channel)
         @accessor.reserve_slot(program.slot)
+        is_record_near = true
       else
         ch_neartime[program.channel] = program.start if program.start < ch_neartime[program.channel]
+        is_record_near = true if Time.now >= program.start - 60 * 30 && Time.now < program.stop
       end
     }
 
@@ -465,35 +486,20 @@ print "!epgdump file: #{filename}\n"
       break if @accessor.available_slot.size <= 0
 
       if !@epg.fresh[ch] || @epg.fresh[ch] < Time.now
-        @accessor.fork() {
-          save_queue(@accessor.get_epg(ch, 60))
-          # fork の中なので update はできない。ファイルとして残す事しかできない
-        }
+        @accessor.get_epg(ch, 60)
       elsif Time.now > @epg.last_fresh[ch] + 60 * 5
-        @accessor.fork() {
-          save_queue(@accessor.get_epg(ch, 3))
-        }
+        @accessor.get_epg(ch, 3)
       end
     }
-
-#p    Process.waitall
-
-return
-
-#          elsif (Time.now + 30 < next_at      && Time.now + 5 >  @epg.last_fresh[ch]) ||
-#                 ||
-#                                                 Time.now + 60 * 4 > @epg.last_fresh[ch]
-#            @epg.update(@accessor.get_epg(slots.shift, ch, 3))
-#    @epg.auto_discovery
+  
+    is_record_near
   end
-
 end
 
 class FabulaAccessor
   def initialize
     @slot = []
     @temporary = "./tmp"
-
   end
 
   def set_config(config_data)
@@ -520,6 +526,12 @@ class FabulaAccessor
     slots
   end
 
+  def waitall_non_blocking
+  end
+  def record(program)
+  end
+  def reserve_slot(slot)
+  end
 
   def in_slot(num)
 p "-- in slot #{num}"
@@ -640,7 +652,7 @@ if $0 == __FILE__
   fabula = Fabula.new
   fabula.load_config
   fabula.load_order
-  fabula.main
+  fabula.main_loop
   fabula.save_order
 end
 
