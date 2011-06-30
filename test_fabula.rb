@@ -164,7 +164,8 @@ class DummyAccessor
     EPG.new(DummyEPG, [{:title => "GETEPG_#{ch}_#{sec}", :channel => ch}])
   end
   def record(program)
-    "#{program.start} - #{program.stop}: #{program.title} "
+    "#{program.slot}/#{program.title}"
+    # 時間はテストに使いにくいのでスロットとタイトルで判定
   end
 
   def available_slot
@@ -173,6 +174,9 @@ class DummyAccessor
   def fork(program = nil, &proc)
     $fork << proc.call
     # FIXME: $fork ってのはさすがにヒドイので別の手段を考える？
+  end
+
+  def reserve_slot(slot)
   end
 
 end
@@ -800,6 +804,30 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal($fork.find{ |a| a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
 
     # 録画キューの処理
+    fabula = Fabula.new
+    fabula.injection_epg(EPG.new(DummyEPG, [
+      {:title => "hoge", :start => Time.now + 60 * 2, :stop => Time.now + 60 * 32, :channel => 'C39' ,:priority => 1, :slot => 0},
+    ]))
+    fabula.injection_config(:channel => {'C39' => 'テレビ東京', 'C47' => '東京ＭＸ'})
+    fabula.injection_accessor(DummyAccessor, [0, 1])
+    fabula.main
+
+    assert_equal($fork.size, 2)
+    assert_equal($fork.find{ |a| a.is_a?String}, "0/hoge")
+    assert_equal($fork.find{ |a| a.is_a?(EPG) && a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
+
+    # 5分以内に録画がある場合
+    fabula = Fabula.new
+    fabula.injection_epg(EPG.new(DummyEPG, [
+      {:title => "hoge", :start => Time.now + 60 * 4, :stop => Time.now + 60 * 34, :channel => 'C39' ,:priority => 1, :slot => 0},
+    ]))
+    fabula.injection_config(:channel => {'C39' => 'テレビ東京', 'C47' => '東京ＭＸ'})
+    fabula.injection_accessor(DummyAccessor, [0, 1])
+    fabula.main
+
+    assert_equal($fork.size, 1)
+    assert_equal($fork.find{ |a| a.is_a?(EPG) && a.program_list[0].channel == 'C47'}.program_list[0].title, "GETEPG_C47_60")
+    # C39 は 5分以内に録画があって、なおかつ録画がまだなので、ひとまず EPG を詰まない
   end
 
 

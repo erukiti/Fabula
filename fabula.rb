@@ -441,18 +441,17 @@ print "!epgdump file: #{filename}\n"
     }
     @epg.program_list.sort { |a,b| a.start <=> b.start} .each { |program|
       next unless program.slot
-
-      if Time.now + (60 * 3) >= program.start
+      if Time.now >= program.start - 60 * 3 && Time.now < program.stop
         # 3分前なので録画準備モードに入る
         # 他にも入る為の条件は必要。そうじゃないと、この処理が走る度に fork が走ってしまう
         # accessor 側で、fork に入るべきかの判定をしてみる？
         @accessor.fork(program) {
           @accessor.record(program)
         }
-        ch_neartime[program.channel] = nil
-      elsif Time.now + (60 * 5) >= program.start
+        ch_neartime.delete(program.channel)
+      elsif Time.now >= program.start - 60 * 5 && Time.now < program.stop
         # 5分以内の場合でも安全の為に EPG 取得モードには入らないようにする
-        ch_neartime[program.channel] = nil
+        ch_neartime.delete(program.channel)
         @accessor.reserve_slot(program.slot)
       else
         ch_neartime[program.channel] = program.start if program.start < ch_neartime[program.channel]
