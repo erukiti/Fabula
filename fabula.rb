@@ -238,7 +238,7 @@ class EPGFromFile
 
     epgdata = YAML.load(savedata)
     if epgdata
-      @channel_list = epgdata[:channel]
+#      @channel_list = epgdata[:channel]
       @fresh = epgdata[:fresh]
       epgdata[:program].each { |program_a|
         @program_list << Program.new(program_a)
@@ -255,7 +255,7 @@ class EPGToFile
       program_a << program.to_a
     }
 
-    {:channel => epg.channel_list, :program => program_a, :fresh => epg.fresh}.to_yaml
+    {:channel => epg.channel_list, :program => program_a}.to_yaml
   end
 end
 
@@ -428,22 +428,41 @@ class Fabula
   end
 
   def load_epgdump
-    Dir.glob("#{@accessor.temporary}/*_epg.xml") { |filename|
-print "!epgdump file: #{filename}\n"
+    Dir.glob("#{@accessor.temporary}/epg_*.ts") { |ts_name|
+      /epg_([^_]+)_([^_]+).ts/ =~ ts_name
+      ch = $1
+      sec = $2.to_i
+
+      dump = `epgdump #{ch} #{ts_name} -`
+      File.unlink ts_name
+
+      epg = EPG.new(EPGFromEpgdump, dump)
+
+      if sec < 30
+        epg.fresh[ch] = nil
+      elsif epg.fresh[ch] > Time.now + (60 * 60 * 4)
+        epg.fresh[ch] = Time.now + (60 * 60 * 4)
+      end
+      @epg.update(epg)
     }
   end
 
   def main_loop
-
+d "**start"
     is_record_near = true
+d Time.now
     while is_record_near || @accessor.waitall_non_blocking
+d "main_loop: #{Time.now}"
+      load_epgdump
       is_record_near = main
-      sleep(10)
+      sleep(3)
     end
 
   end
 
   def main
+
+d "---- main"
     # EPG プログラムリストが空ならば、3秒リフレッシュの準備
     if @epg.program_list.size == 0
       @channel.each { |ch, name|
@@ -482,6 +501,7 @@ print "!epgdump file: #{filename}\n"
     ch_neartime.sort{|a, b| a <=> b }.each { |ch, next_at|
       # 切羽詰まってる順で EPG 取得処理を行う
 
+d @accessor.available_slot
       # そもそも録画スロットに空きがなければ処理しない
       break if @accessor.available_slot.size <= 0
 
@@ -491,91 +511,118 @@ print "!epgdump file: #{filename}\n"
         @accessor.get_epg(ch, 3)
       end
     }
+
+d "---- main end"
   
     is_record_near
   end
 end
 
 class FabulaAccessor
+  attr_reader :temporary
+
   def initialize
+    @device = []
     @slot = []
+    @pid = {}
     @temporary = "./tmp"
   end
 
   def set_config(config_data)
     @temporary = config_data[:temporary]
-    @slot = config_data[:slot]
-  end
-
-  def get_filename(ch)
-    # ch が被ってて、かつ同時アクセスがあるとアウト
-    # デバイスの排他制御でなんとかなるはず
-
-    time = Time.now.strftime("%Y%m%d%H%M%S")
-    ["#{@temporary}/#{ch}_#{time}.ts", "#{@temporary}/#{ch}_#{time}_epg.xml"]
+    @recording = config_data[:recording]
+    @device = config_data[:slot]
+    @slot = Array.new(@device.size)
   end
 
   def available_slot
     slots = []
     num = 0
-    @slot.each { |dev|
-      lock_name = "#{@temporary}/slot_#{num}"
-      slots << num unless File.exists?(lock_name)
+    @slot.each { |status|
+      slots << num unless status
       num += 1
     }
+d "available_slot #{slots.size}"
     slots
   end
 
   def waitall_non_blocking
+    is_need_wait = false
+    @pid.each { |pid, slot_num|
+      if Process.waitpid(pid, Process::WNOHANG | Process::WUNTRACED) != nil
+        is_need_wait = true
+      else
+        @pid.delete(pid)
+        @slot[slot_num] = nil
+      end
+    }
+    is_need_wait
   end
-  def record(program)
-  end
+
   def reserve_slot(slot)
+    @slot[slot] = :reserve
   end
 
-  def in_slot(num)
-p "-- in slot #{num}"
+  def fork(slot_num, using, &proc)
+    @slot[slot_num] = using
 
-    lock_name = "#{@temporary}/slot_#{num}"
-    Dir.mkdir(lock_name) ? @slot[num] : false
+d "fork: #{slot_num}"
+    sleep(0.5)
+    pid = Process::fork
+    if pid
+      @pid[pid] = slot_num
+    else
+      proc.call
+      exit
+    end
   end
 
-  def out_slot(num)
-p "-- out slot #{num}"
-    lock_name = "#{@temporary}/slot_#{num}"
-    Dir.rmdir lock_name
+  def record(program)
+d "fuga"
+    @slot.each { |slot_num, using|
+      return if using == program
+    }
+
+    fork(slot_num, program) {
+      while Time.now < program.start - 15
+        sleep(min(program.start - Time.now - 15, 10))
+      end
+
+      device = @device[program.slot]
+      ch = program.ch
+      sec = program.stop - program.start - 15
+d "----recording #{slot_num}, #{ch}, #{sec}  use #{device}\n"
+d "#{program.title}"
+
+      time = program.start.strftime("%Y%m%d%H%M")
+      ts_name = "#{@recording}/#{time}_#{title}.ts"
+
+      log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name} 2>&1`
+      # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
+    }
   end
 
   def get_epg(ch, sec)
-print "----get_epg #{slot_num}, #{ch}, #{sec}\n"
-    device = in_slot(slot_num)
-p device
-    unless device
-      p "device busy"
-      return EPG.new(EPGFromNull)
+d "get_epg #{ch} #{sec}"
+    slots = available_slot
+
+    if slots.size == 0
+      d "slot が取得できなかった"
+      return
     end
 
-    ts_name, epg_name = get_filename(ch)
-    epgtemp_name = "#{epg_name}_progress"
+    slot_num = slots[0]
+    fork(slot_num, :epg) {
+      device = @device[slot_num]
+d "----get_epg #{slot_num}, #{ch}, #{sec}  use #{device}\n"
 
-    log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name} 2>&1`
-    # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
-    
-    out_slot(slot_num)
-    dump = `epgdump #{ch} #{ts_name} -`
-    File.unlink ts_name
+      time = Time.now.strftime("%Y%m%d%H%M%S")
+      ts_name = "#{@temporary}/epg_#{ch}_#{time}.ts"
 
-    # FIXME: stderr からログを取得するようにする (特に recpt1)
-    # FIXME: それぞれのコマンドが失敗したら false を返すようにする
-
-    epg = EPG.new(EPGFromEpgdump, dump)
-    if sec < 30
-      epg.fresh[ch] = nil
-    elsif epg.fresh[ch] > Time.now + (60 * 60 * 24)
-      epg.fresh[ch] = Time.now + (60 * 60 * 24)
-    end
-
-    epg
+      log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name} 2>&1`
+d log
+      # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
+    }
   end
 end
 
@@ -632,6 +679,7 @@ class Log
       else
         f << "#{message.inspect}\n"
       end
+      #f << "#{caller[0]}\n"
       f.flush
     }
   end
