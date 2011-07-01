@@ -239,7 +239,7 @@ class EPGFromFile
     epgdata = YAML.load(savedata)
     if epgdata
 #      @channel_list = epgdata[:channel]
-      @fresh = epgdata[:fresh]
+#      @fresh = epgdata[:fresh]
       epgdata[:program].each { |program_a|
         @program_list << Program.new(program_a)
       }
@@ -449,15 +449,17 @@ class Fabula
 
   def main_loop
 d "**start"
+	fabula_start = Time.now
     is_record_near = true
 d Time.now
-    while is_record_near || @accessor.waitall_non_blocking
+    while is_record_near || @accessor.waitall_non_blocking || Time.now < fabula_start + 60 * 60 * 24
 d "main_loop: #{Time.now}"
       load_epgdump
       is_record_near = main
       sleep(3)
     end
 
+d "end"
   end
 
   def main
@@ -501,10 +503,10 @@ d "---- main"
     ch_neartime.sort{|a, b| a <=> b }.each { |ch, next_at|
       # 切羽詰まってる順で EPG 取得処理を行う
 
-d @accessor.available_slot
       # そもそも録画スロットに空きがなければ処理しない
       break if @accessor.available_slot.size <= 0
 
+d @epg.fresh
       if !@epg.fresh[ch] || @epg.fresh[ch] < Time.now
         @accessor.get_epg(ch, 60)
       elsif Time.now > @epg.last_fresh[ch] + 60 * 5
@@ -547,11 +549,18 @@ d "available_slot #{slots.size}"
   end
 
   def waitall_non_blocking
+d "waitall"
     is_need_wait = false
     @pid.each { |pid, slot_num|
-      if Process.waitpid(pid, Process::WNOHANG | Process::WUNTRACED) != nil
-        is_need_wait = true
-      else
+d "pid: #{pid}"
+      begin 
+        if Process.waitpid(pid, Process::WNOHANG | Process::WUNTRACED) == nil
+          is_need_wait = true
+        else
+          @pid.delete(pid)
+          @slot[slot_num] = nil
+        end
+      rescue Errno::ECHILD
         @pid.delete(pid)
         @slot[slot_num] = nil
       end
@@ -567,7 +576,7 @@ d "available_slot #{slots.size}"
     @slot[slot_num] = using
 
 d "fork: #{slot_num}"
-    sleep(0.5)
+    sleep(2)
     pid = Process::fork
     if pid
       @pid[pid] = slot_num
@@ -578,7 +587,7 @@ d "fork: #{slot_num}"
   end
 
   def record(program)
-d "fuga"
+d "rec"
     @slot.each { |slot_num, using|
       return if using == program
     }
