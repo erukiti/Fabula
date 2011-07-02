@@ -22,4 +22,13 @@
 * recpt1なしで録画とか
 * ts解析してEPG情報をもうちょっと詳細にしらべてみたり
 
+■使い方
+
+create_sample_config.rb と create_sample_control.rb を適当に弄ってから使って、
+.config.yaml や .control.yaml をはき出してみて、fabula.rb を実行すると動くかもしれません
+
+※すいません、全然ここらへん他の人が使えるように作っておりません…。
+※なんかいい感じの設定方法とか考えます…。
+
+
 
