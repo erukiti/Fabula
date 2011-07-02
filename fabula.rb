@@ -291,10 +291,12 @@ class EPGFromEpgdump
     @channel_list.each { |ch, name|
       fresh_start = nil
       fresh_end = nil
+
       @program_list.each { |program|
-        next if ch != program.channel || program.start > Time.now || Time.now > program.stop
+        next if ch != program.channel || program.stop < Time.now
 
         unless fresh_start 
+          break if program.start > Time.now
           fresh_start = program.start 
           fresh_end = program.stop
         else
