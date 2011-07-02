@@ -157,12 +157,6 @@ EOF
     from_epgdump = EPGFromEpgdump.new(dummy_xml)
     assert_equal(from_epgdump.program_list.size, 3)
     assert_equal(from_epgdump.fresh['C39'], nil)
-
-
-return
-
-
-
   end
 end
 
@@ -222,14 +216,17 @@ class TC_EPG < Test::Unit::TestCase
     #
     epg = EPG.new(DummyEPG, [
       {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
+      {:fresh => Time.local(2011, 6, 14, 23, 0), :channel => "C39"}
     ])
     epg2 = EPG.new(DummyEPG, [
       {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :channel => "C39"},
       {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
       {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :channel => "C39"},
+      {:fresh => Time.local(2011, 6, 15, 0, 0), :channel => "C39"}
     ])
 
     epg.update(epg2)
+    assert_equal(epg.fresh['C39'], Time.local(2011, 6, 15, 0, 0))
     assert_equal(epg.program_list.size, 3)
     assert_equal(epg.program_list.find{ |a| a.title == "C1"}.start, Time.local(2011, 6, 14, 23, 0))
     assert_equal(epg.program_list.find{ |a| a.title == "C1"}.stop, Time.local(2011, 6, 14, 23, 30))
@@ -241,14 +238,18 @@ class TC_EPG < Test::Unit::TestCase
     #チャンネル違いへの対応
     epg = EPG.new(DummyEPG, [
       {:title => 'M0',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C47"},
+      {:fresh => Time.local(2011, 6, 14, 23, 0), :channel => "C47"}
     ])
     epg2 = EPG.new(DummyEPG, [
       {:title => 'C1',  :start => Time.local(2011, 6, 14, 23, 0),  :stop => Time.local(2011, 6, 14, 23, 30), :channel => "C39"},
       {:title => 'C2',  :start => Time.local(2011, 6, 14, 23, 30), :stop => Time.local(2011, 6, 15, 0, 0), :channel => "C39"},
       {:title => 'C3',  :start => Time.local(2011, 6, 15, 10, 0),  :stop => Time.local(2011, 6, 15, 10, 30), :channel => "C39"},
+      {:fresh => Time.local(2011, 6, 15, 0, 0), :channel => "C39"}
     ])
 
     epg.update(epg2)
+    assert_equal(epg.fresh['C39'], Time.local(2011, 6, 15, 0, 0))
+    assert_equal(epg.fresh['C47'], Time.local(2011, 6, 14, 23, 0))
     assert_equal(epg.program_list.size, 4)
     assert_equal(epg.program_list.find{ |a| a.title == "M0"}.start, Time.local(2011, 6, 14, 23, 30))
     assert_equal(epg.program_list.find{ |a| a.title == "M0"}.stop, Time.local(2011, 6, 15, 0, 0))

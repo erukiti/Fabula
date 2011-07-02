@@ -43,15 +43,18 @@ class EPG
 
   def update(epg_updater)
     channel = {}
-    @program_list.each { |program|
-      channel[program.channel] = true unless channel[program.channel]
-    }
     epg_updater.program_list.each { |program|
       unless channel[program.channel]
         channel[program.channel] = true
-        @fresh[program.channel] = epg_updater.fresh[program.channel]
 
-        @last_fresh[program.channel] = Time.now
+        @fresh[program.channel] = epg_updater.fresh[program.channel]
+d "#{program.channel}: @fresh = #{@fresh[program.channel]}"
+      @last_fresh[program.channel] = Time.now
+      end
+    }
+    @program_list.each { |program|
+      unless channel[program.channel]
+        channel[program.channel] = true 
       end
     }
 
@@ -65,6 +68,8 @@ class EPG
   def update_ch(master, updater)
     # epg_updater に含まれている時間の範囲を算出する
 
+    cnt_update = 0
+
     cnt_master = 0
     cnt_updater = 0
     new_program_list = []
@@ -73,9 +78,10 @@ class EPG
 
       # アップデータ側にしかない
       if master.size == cnt_master || (updater.size > cnt_updater && updater[cnt_updater].stop <= master[cnt_master].start)
-        d "++#{updater[cnt_updater].start} - #{updater[cnt_updater].stop} 「#{updater[cnt_updater].title}」"
+#        d "++#{updater[cnt_updater].start} - #{updater[cnt_updater].stop} 「#{updater[cnt_updater].title}」"
 
         new_program_list << updater[cnt_updater]
+        cnt_update += 1
         cnt_updater += 1
         next
       end
@@ -134,6 +140,8 @@ class EPG
 
       # FIXME: タイトルなどデータが変わった場合なんかも更新するようにする
 
+
+d "++ #{cnt_update}" if cnt_update > 0
     end
 
     new_program_list
@@ -401,11 +409,6 @@ class Fabula
     FileUtils.touch(filename)
 
     @order_file = File.open(filename, 'r+')
-    unless @order_file.flock(File::LOCK_EX | File::LOCK_NB)
-      # ロックを取得できないので今回の実行は諦める
-      # FIXME: alert
-      return false
-    end
 
     @epg = EPG.new(EPGFromFile, @order_file.read)
     #rescue
@@ -418,8 +421,6 @@ class Fabula
   def save_order
     @order_file.rewind
     @order_file << EPGToFile.to_yaml(@epg)
-    @order_file.close
-    @order_file = nil
   end
 
   def save_queue(epg)
@@ -431,9 +432,9 @@ class Fabula
 
   def load_epgdump
     Dir.glob("#{@accessor.temporary}/epg_*.ts") { |ts_name|
-      /epg_([^_]+)_([^_]+).ts/ =~ ts_name
+      /epg_([^_]+)_([^_]+)_([^_]+).ts/ =~ ts_name
       ch = $1
-      sec = $2.to_i
+      sec = $3.to_i
 
       dump = `epgdump #{ch} #{ts_name} -`
       File.unlink ts_name
@@ -445,28 +446,30 @@ class Fabula
       elsif epg.fresh[ch] > Time.now + (60 * 60 * 4)
         epg.fresh[ch] = Time.now + (60 * 60 * 4)
       end
+d "load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
       @epg.update(epg)
     }
   end
 
   def main_loop
-d "**start"
+#d "**start"
 	fabula_start = Time.now
     is_record_near = true
-d Time.now
+#d Time.now
     while is_record_near || @accessor.waitall_non_blocking || Time.now < fabula_start + 60 * 60 * 24
-d "main_loop: #{Time.now}"
+#d "main_loop: #{Time.now}"
       load_epgdump
+      save_order
       is_record_near = main
       sleep(3)
     end
 
-d "end"
+#d "end"
   end
 
   def main
 
-d "---- main"
+#d "---- main"
     # EPG プログラムリストが空ならば、3秒リフレッシュの準備
     if @epg.program_list.size == 0
       @channel.each { |ch, name|
@@ -508,7 +511,6 @@ d "---- main"
       # そもそも録画スロットに空きがなければ処理しない
       break if @accessor.available_slot.size <= 0
 
-d @epg.fresh
       if !@epg.fresh[ch] || @epg.fresh[ch] < Time.now
         @accessor.get_epg(ch, 60)
       elsif Time.now > @epg.last_fresh[ch] + 60 * 5
@@ -516,7 +518,7 @@ d @epg.fresh
       end
     }
 
-d "---- main end"
+#d "---- main end"
   
     is_record_near
   end
@@ -546,15 +548,15 @@ class FabulaAccessor
       slots << num unless status
       num += 1
     }
-d "available_slot #{slots.size}"
+#d "available_slot #{slots.size}"
     slots
   end
 
   def waitall_non_blocking
-d "waitall"
+#d "waitall"
     is_need_wait = false
     @pid.each { |pid, slot_num|
-d "pid: #{pid}"
+d "waitpid: #{pid}"
       begin 
         if Process.waitpid(pid, Process::WNOHANG | Process::WUNTRACED) == nil
           is_need_wait = true
@@ -575,9 +577,10 @@ d "pid: #{pid}"
   end
 
   def fork(slot_num, using, &proc)
-    @slot[slot_num] = using
+    return if @slot.find { |u| u == using}
 
-d "fork: #{slot_num}"
+    @slot[slot_num] = using
+d "fork: #{slot_num} #{using}"
     sleep(2)
     pid = Process::fork
     if pid
@@ -590,9 +593,6 @@ d "fork: #{slot_num}"
 
   def record(program)
 d "rec"
-    @slot.each { |slot_num, using|
-      return if using == program
-    }
 
     fork(slot_num, program) {
       while Time.now < program.start - 15
@@ -614,7 +614,6 @@ d "#{program.title}"
   end
 
   def get_epg(ch, sec)
-d "get_epg #{ch} #{sec}"
     slots = available_slot
 
     if slots.size == 0
@@ -623,16 +622,19 @@ d "get_epg #{ch} #{sec}"
     end
 
     slot_num = slots[0]
-    fork(slot_num, :epg) {
+    fork(slot_num, "epg_{ch}") {
       device = @device[slot_num]
 d "----get_epg #{slot_num}, #{ch}, #{sec}  use #{device}\n"
 
       time = Time.now.strftime("%Y%m%d%H%M%S")
-      ts_name = "#{@temporary}/epg_#{ch}_#{time}.ts"
+      ts_name = "#{@temporary}/epg_#{ch}_#{time}_#{sec}.ts"
 
-      log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name} 2>&1`
-d log
+      log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name}_now 2>&1`
+#d log
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
+
+      File.rename("#{ts_name}_now", ts_name)
+d "++++get_epg end #{slot_num}, #{ch}, #{sec}  use #{device}\n"
     }
   end
 end
@@ -712,7 +714,6 @@ if $0 == __FILE__
   fabula.load_config
   fabula.load_order
   fabula.main_loop
-  fabula.save_order
 end
 
 
