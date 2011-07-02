@@ -15,7 +15,7 @@ class Array
         buf += " " * indent + node.inspect(indent) + "\n"
       else
         buf += " " * indent + node.inspect + "\n"
-      end 
+      end
     }
     indent -= 2
     buf += " " * indent + "]\n"
@@ -125,12 +125,15 @@ d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
 
       #replace されるので alert を出す
       (replaced_start...cnt_master).each { |cnt|
-        d "- #{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」"
+d "- #{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」"
+        info_log "#{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」が削除されました"
+
       }
 
       #replace を行いつつ、上書き側の alert を出す
       (cnt_start...cnt_updater).each { |cnt|
-        d "+ #{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」"
+d "+ #{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」"
+        info_log "#{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」にリプレイスされました"
         new_program_list << updater[cnt]
       }
 
@@ -139,7 +142,6 @@ d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
 
 
       # FIXME: タイトルなどデータが変わった場合なんかも更新するようにする
-
 
 d "++ #{cnt_update}" if cnt_update > 0
     end
@@ -455,7 +457,6 @@ d "! EPG broken"
         next
       end
 
-
       if sec < 30
         epg.fresh[ch] = nil
       elsif epg.fresh[ch] && epg.fresh[ch] > Time.now + (60 * 60 * 4)
@@ -596,7 +597,6 @@ d "-#{pid}: #{slot_num}, #{@slot[slot_num]} is not found"
 
   def reserve_slot(slot)
     unless @slot[slot]
-d "! slot reserve #{slot}: <#{@slot[slot]}>"
       @slot[slot] = :reserve 
     end
   end
@@ -626,19 +626,26 @@ d "+#{pid} #{slot_num} '#{using}' fork"
     slot_num = program.slot
     fork(slot_num, "rec_#{program.channel}") {
       while Time.now < program.start - 15
-        sleep(min(program.start - Time.now - 15, 10))
+        sleep((program.start - Time.now - 15 > 10) ? 10 : (program.start - Time.now - 15))
       end
 
       device = @device[program.slot]
       ch = program.channel
-      start = Time.now > program.start ? Time.now : prgoram.start
+      start = Time.now > program.start ? Time.now : program.start
 
 
       sec = Integer(program.stop - start - 15)
-d " #{Process.pid} ++++ recording #{slot_num} #{ch}, #{sec}  use #{device} to:#{program.stop} 「#{program.title}」"
+d " #{Process.pid} ++++ recording #{slot_num} #{ch}, #{sec} use #{device} #{start} - #{program.stop} 「#{program.title}」"
 
       time = program.start.strftime("%Y%m%d%H%M")
-      ts_name = "#{@recording}/#{time}_#{program.title}.ts"
+      if start == program.start
+        ts_name = "#{@recording}/#{time}_#{ch}_#{program.title}.ts"
+        info_log "#{start} - #{program.stop} 「#{program.title}」録画開始"
+      else
+        ts_name = "#{@recording}/#{time}_#{ch}_#{program.title}_※.ts"
+        info_log "#{start}(#{program.start}) - #{program.stop} 「#{program.title}」録画開始(部分録画)"
+d "!partial"
+      end
 
       cmd = "recpt1 --b25 --strip --device #{device} #{ch} #{sec} #{ts_name} 2>&1"
 
@@ -646,6 +653,7 @@ d " #{Process.pid} ++++ recording #{slot_num} #{ch}, #{sec}  use #{device} to:#{
       log = `#{cmd}`
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
 d " #{Process.pid} ---- recording end #{slot_num} #{ch}, #{sec}  use #{device}"
+        info_log "#{start} - #{program.stop} 「#{program.title}」録画終了"
       exit
     }
   end
@@ -727,7 +735,7 @@ class ControlList
 end
 
 class Log
-  def Log::output(message, level = "debug")
+  def Log::output(message, level = :debug)
     File.open("fabula.log", "a") { |f|
       if message.is_a? String
         f << "#{message}\n"
@@ -737,13 +745,29 @@ class Log
       #f << "#{caller[0]}\n"
       f.flush
     }
+
+    if level == :info
+      File.open("fabula_user.log", "a") { |f|
+        if message.is_a? String
+          f << "#{message}\n"
+        else
+          f << "#{message.inspect}\n"
+        end
+        #f << "#{caller[0]}\n"
+        f.flush
+      }
+    end
+
   end
 end
 
-def d(message, level = "debug")
+def d(message, level = :debug)
   Log::output(message, level)
 end
 
+def info_log(message)
+  Log::output(message, :info)
+end
 
 
 
@@ -752,11 +776,15 @@ end
 # FIXME map! に動作をかえる？
 
 if $0 == __FILE__
+  d "fabula start #{Time.now}"
+  info_log "fabula start #{Time.now}"
   fabula = Fabula.new
   fabula.load_config
   fabula.load_order
   fabula.load_control
   fabula.main_loop
+  d "fabula end #{Time.now}"
+  info_log "fabula end #{Time.now}"
 end
 
 
