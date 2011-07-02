@@ -378,7 +378,7 @@ class Fabula
     @epg = EPG.new(EPGFromNull)
     @accessor = FabulaAccessor.new
     @temporary = nil
-    @order_file = nil
+    @cl = nil
   end
 
   def injection_accessor(accessor, opt = nil)
@@ -403,14 +403,21 @@ class Fabula
     # FIXME: temporary directory 処理
   end
 
+  def load_control
+    @cl = ControlList.new
+    @cl.load_control_list
+  end
+
+  def map_control
+    @epg.program_list.map! { |program| @cl.program_mapper(program)}
+  end
+
   def load_order
     #begin
     filename = ".order.yaml"
     FileUtils.touch(filename)
 
-    @order_file = File.open(filename, 'r+')
-
-    @epg = EPG.new(EPGFromFile, @order_file.read)
+    @epg = EPG.new(EPGFromFile, IO.read(filename))
     #rescue
     #  print "-------- error\n"
     #  p $!
@@ -419,8 +426,9 @@ class Fabula
   end
 
   def save_order
-    @order_file.rewind
-    @order_file << EPGToFile.to_yaml(@epg)
+    File.open(".order.yaml", "w") { |f|
+      f << EPGToFile.to_yaml(@epg)
+    }
   end
 
   def save_queue(epg)
@@ -459,6 +467,7 @@ d "load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
     while is_record_near || @accessor.waitall_non_blocking || Time.now < fabula_start + 60 * 60 * 24
 #d "main_loop: #{Time.now}"
       load_epgdump
+      map_control
       save_order
       is_record_near = main
       sleep(3)
@@ -622,7 +631,7 @@ d "#{program.title}"
     end
 
     slot_num = slots[0]
-    fork(slot_num, "epg_{ch}") {
+    fork(slot_num, "epg_#{ch}") {
       device = @device[slot_num]
 d "----get_epg #{slot_num}, #{ch}, #{sec}  use #{device}\n"
 
@@ -630,8 +639,9 @@ d "----get_epg #{slot_num}, #{ch}, #{sec}  use #{device}\n"
       ts_name = "#{@temporary}/epg_#{ch}_#{time}_#{sec}.ts"
 
       log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name}_now 2>&1`
-#d log
+d log
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
+      # "using device: dev/ptx0.t0\npid = 3000\nCannot open tuner device: dev/ptx0.t0\n"
 
       File.rename("#{ts_name}_now", ts_name)
 d "++++get_epg end #{slot_num}, #{ch}, #{sec}  use #{device}\n"
@@ -645,18 +655,20 @@ class ControlList
   end
 
   def load_control_list
+    @control_list = YAML.load(IO.read('.control.yaml'))
   end
 
-  def program_mapper(program)
-    program.priority = 0
+  def program_mapper(program_old)
+    program = program_old.dup
+    program.priority = 0 if program.priority == nil
     @control_list.each {|control|
-      next if control['title'] != nil && Regexp.new(control['title']) !~ program.title
-      next if control['desc'] != nil && Regexp.new(control['desc']) !~ program.desc
-      next if control['category'] != nil && control['category'] != program.category
-      next if control['channel'] != nil && control['channel'] != program.channel
+      next if control[:title] != nil && Regexp.new(control[:title]) !~ program.title
+      next if control[:desc] != nil && Regexp.new(control[:desc]) !~ program.desc
+      next if control[:category] != nil && control[:category] != program.category
+      next if control[:channel] != nil && control[:channel] != program.channel
 
-      if control['time_range'] != nil
-        next if control['time_range'].last <= program.start
+      if control[:time_range] != nil
+        next if control[:time_range].last <= program.start
         # FIXME: 前後両方が完全に収まってる事をチェックする
 
 
@@ -668,17 +680,18 @@ class ControlList
       # すべてマッチしたので、priority を変更
 
       # 一度ブラックリスト(優先度:-1)のチェックがついてしまった場合、優先度は変更できなくなる
-      next if program.priority < 0
+      next if program.priority < 0 || program.priority == control[:priority]
 
       # blacklist or 優先度上昇
-      program.priority = control['priority'] if control['priority'] < 0 || control['priority'] > program.priority
+      program.priority = control[:priority] if control[:priority] < 0 || control[:priority] > program.priority
+d "#{program.channel}: #{program.start} - #{program.stop}: #{program.title} priority: #{program.priority}"
     }
 
     program
   end
 
   def add(title, desc, category, time_range, channel, priority)
-    @control_list << {'title' => title, 'desc' => desc, 'category' => category, 'time_range' => time_range, 'channel' => channel, 'priority' => priority}
+    @control_list << {:title => title, :desc => desc, :category => category, :time_range => time_range, :channel => channel, :priority => priority}
     self
   end
 
@@ -713,6 +726,7 @@ if $0 == __FILE__
   fabula = Fabula.new
   fabula.load_config
   fabula.load_order
+  fabula.load_control
   fabula.main_loop
 end
 
