@@ -504,7 +504,7 @@ d "  load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
 
     @epg.program_list.sort { |a,b| a.start <=> b.start} .each { |program|
       next unless program.slot
-      if Time.now >= program.start - 60 * 3 && Time.now < program.stop
+      if Time.now >= program.start - 60 * 3 && Time.now < program.stop - 60 * 1
         # 3分前～録画中なので録画モードに入る (開始前ならsleep で準備される)
         @accessor.record(program)
         ch_neartime.delete(program.channel)
