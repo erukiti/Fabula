@@ -210,7 +210,12 @@ d "++ #{cnt_update}" if cnt_update > 0
           end
           i += 1
         end while i < device_number && program.conflict
-        @conflict_cnt += 1 if program.conflict
+        if program.conflict
+          @conflict_cnt += 1 
+          program.slot = nil
+d "! conflict #{program.channel, #{program.title}"
+          info_log("録画にコンフリクトがあった為、録画できません #{program.channel}: #{program.title}"
+        end
       }
     }
 
