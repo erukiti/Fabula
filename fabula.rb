@@ -48,7 +48,7 @@ class EPG
         channel[program.channel] = true
 
         @fresh[program.channel] = epg_updater.fresh[program.channel]
-d "#{program.channel}: @fresh = #{@fresh[program.channel]}"
+d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
       @last_fresh[program.channel] = Time.now
       end
     }
@@ -176,6 +176,8 @@ d "++ #{cnt_update}" if cnt_update > 0
   def resolve_conflict(device_number)
     channel = {}
     @conflict_cnt = 0
+
+    return if @program_list.size == 0
 
     # conflict_chunk をそれぞれ解決する
     conflict_chunk_list.each { |conflict_chunk|
@@ -448,13 +450,18 @@ class Fabula
       File.unlink ts_name
 
       epg = EPG.new(EPGFromEpgdump, dump)
+      if epg.program_list.size == 0
+d "! EPG broken"
+        next
+      end
+
 
       if sec < 30
         epg.fresh[ch] = nil
-      elsif epg.fresh[ch] > Time.now + (60 * 60 * 4)
+      elsif epg.fresh[ch] && epg.fresh[ch] > Time.now + (60 * 60 * 4)
         epg.fresh[ch] = Time.now + (60 * 60 * 4)
       end
-d "load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
+d "  load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
       @epg.update(epg)
     }
   end
@@ -464,10 +471,11 @@ d "load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
 	fabula_start = Time.now
     is_record_near = true
 #d Time.now
-    while is_record_near || @accessor.waitall_non_blocking || Time.now < fabula_start + 60 * 60 * 24
+    while @accessor.waitall_non_blocking || is_record_near || Time.now < fabula_start + 60 * 60 * 24
 #d "main_loop: #{Time.now}"
       load_epgdump
       map_control
+      @epg.resolve_conflict(@accessor.number_slot)
       save_order
       is_record_near = main
       sleep(3)
@@ -497,9 +505,7 @@ d "load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
     @epg.program_list.sort { |a,b| a.start <=> b.start} .each { |program|
       next unless program.slot
       if Time.now >= program.start - 60 * 3 && Time.now < program.stop
-        # 3分前なので録画準備モードに入る
-        # 他にも入る為の条件は必要。そうじゃないと、この処理が走る度に fork が走ってしまう
-        # accessor 側で、fork に入るべきかの判定をしてみる？
+        # 3分前～録画中なので録画モードに入る (開始前ならsleep で準備される)
         @accessor.record(program)
         ch_neartime.delete(program.channel)
         is_record_near = true
@@ -509,7 +515,7 @@ d "load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
         @accessor.reserve_slot(program.slot)
         is_record_near = true
       else
-        ch_neartime[program.channel] = program.start if program.start < ch_neartime[program.channel]
+        ch_neartime[program.channel] = program.start if ch_neartime[program.channel] == nil || program.start < ch_neartime[program.channel]
         is_record_near = true if Time.now >= program.start - 60 * 30 && Time.now < program.stop
       end
     }
@@ -550,6 +556,11 @@ class FabulaAccessor
     @slot = Array.new(@device.size)
   end
 
+  def number_slot
+    @slot.size
+  end
+
+
   def available_slot
     slots = []
     num = 0
@@ -564,17 +575,19 @@ class FabulaAccessor
   def waitall_non_blocking
 #d "waitall"
     is_need_wait = false
-    @pid.each { |pid, slot_num|
-d "waitpid: #{pid}"
+    @pid.each { |slot_num, pid|
+#d "waitpid: #{pid}"
       begin 
         if Process.waitpid(pid, Process::WNOHANG | Process::WUNTRACED) == nil
           is_need_wait = true
         else
-          @pid.delete(pid)
+d "-#{pid} #{slot_num}, #{@slot[slot_num]} end"
+          @pid[slot_num] = nil
           @slot[slot_num] = nil
         end
       rescue Errno::ECHILD
-        @pid.delete(pid)
+d "-#{pid}: #{slot_num}, #{@slot[slot_num]} is not found"
+        @pid[slot_num] = nil
         @slot[slot_num] = nil
       end
     }
@@ -582,18 +595,26 @@ d "waitpid: #{pid}"
   end
 
   def reserve_slot(slot)
-    @slot[slot] = :reserve
+    unless @slot[slot]
+d "! slot reserve #{slot}: <#{@slot[slot]}>"
+      @slot[slot] = :reserve 
+    end
   end
 
   def fork(slot_num, using, &proc)
     return if @slot.find { |u| u == using}
 
+    if @pid[slot_num]
+d "! #{@pid[slot_num]} is stil running  / #{slot_num} '#{using}'"
+      return
+    end
+
     @slot[slot_num] = using
-d "fork: #{slot_num} #{using}"
     sleep(2)
     pid = Process::fork
     if pid
-      @pid[pid] = slot_num
+d "+#{pid} #{slot_num} '#{using}' fork"
+      @pid[slot_num] = pid
     else
       proc.call
       exit
@@ -601,24 +622,31 @@ d "fork: #{slot_num} #{using}"
   end
 
   def record(program)
-d "rec"
-
-    fork(slot_num, program) {
+#d "rec"
+    slot_num = program.slot
+    fork(slot_num, "rec_#{program.channel}") {
       while Time.now < program.start - 15
         sleep(min(program.start - Time.now - 15, 10))
       end
 
       device = @device[program.slot]
-      ch = program.ch
-      sec = program.stop - program.start - 15
-d "----recording #{slot_num}, #{ch}, #{sec}  use #{device}\n"
-d "#{program.title}"
+      ch = program.channel
+      start = Time.now > program.start ? Time.now : prgoram.start
+
+
+      sec = Integer(program.stop - start - 15)
+d " #{Process.pid} ++++ recording #{slot_num} #{ch}, #{sec}  use #{device} to:#{program.stop} 「#{program.title}」"
 
       time = program.start.strftime("%Y%m%d%H%M")
-      ts_name = "#{@recording}/#{time}_#{title}.ts"
+      ts_name = "#{@recording}/#{time}_#{program.title}.ts"
 
-      log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name} 2>&1`
+      cmd = "recpt1 --b25 --strip --device #{device} #{ch} #{sec} #{ts_name} 2>&1"
+
+#d cmd
+      log = `#{cmd}`
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
+d " #{Process.pid} ---- recording end #{slot_num} #{ch}, #{sec}  use #{device}"
+      exit
     }
   end
 
@@ -626,25 +654,26 @@ d "#{program.title}"
     slots = available_slot
 
     if slots.size == 0
-      d "slot が取得できなかった"
+d "! slot が取得できなかった"
       return
     end
 
     slot_num = slots[0]
     fork(slot_num, "epg_#{ch}") {
       device = @device[slot_num]
-d "----get_epg #{slot_num}, #{ch}, #{sec}  use #{device}\n"
+d " #{Process.pid} ++++ get_epg #{slot_num}, #{ch}, #{sec}  use #{device}"
 
       time = Time.now.strftime("%Y%m%d%H%M%S")
       ts_name = "#{@temporary}/epg_#{ch}_#{time}_#{sec}.ts"
 
       log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name}_now 2>&1`
-d log
+#d log
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
       # "using device: dev/ptx0.t0\npid = 3000\nCannot open tuner device: dev/ptx0.t0\n"
 
       File.rename("#{ts_name}_now", ts_name)
-d "++++get_epg end #{slot_num}, #{ch}, #{sec}  use #{device}\n"
+d " #{Process.pid} ---- get_epg end #{slot_num} #{ch}, #{sec}  use #{device}"
+      exit
     }
   end
 end
@@ -684,7 +713,7 @@ class ControlList
 
       # blacklist or 優先度上昇
       program.priority = control[:priority] if control[:priority] < 0 || control[:priority] > program.priority
-d "#{program.channel}: #{program.start} - #{program.stop}: #{program.title} priority: #{program.priority}"
+#d "#{program.channel}: #{program.start} - #{program.stop}: #{program.title} priority: #{program.priority}"
     }
 
     program
