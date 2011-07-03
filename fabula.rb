@@ -47,7 +47,9 @@ class EPG
       unless channel[program.channel]
         channel[program.channel] = true
 
-        @fresh[program.channel] = epg_updater.fresh[program.channel]
+        if !@fresh[program.channel] || (epg_updater.fresh[program.channel] && @fresh[program.channel] < epg_updater.fresh[program.channel]) 
+          @fresh[program.channel] = epg_updater.fresh[program.channel] 
+        end
 d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
       @last_fresh[program.channel] = Time.now
       end
@@ -151,12 +153,15 @@ d "++ #{cnt_update}" if cnt_update > 0
 
   def conflict_chunk_list
     program_list = @program_list.find_all{ |a| a.priority > 0}.sort { |a, b| a.start <=> b.start }
-
+    return [program_list] if program_list.size < 2
     conflict = []
 
     i = 0
     begin
-      next if program_list[i].stop < program_list[i + 1].start
+      if program_list[i].stop < program_list[i + 1].start
+        conflict << [program_list[i]]
+        next 
+      end
 
       conflict << [program_list[i], program_list[i + 1]]
       stop_mark = program_list[i].stop >= program_list[i + 1].stop ? program_list[i].stop : program_list[i + 1].stop 
@@ -172,6 +177,11 @@ d "++ #{cnt_update}" if cnt_update > 0
     ensure 
       i += 1
     end while i < program_list.size - 2
+
+    while i < program_list.size
+      conflict << [program_list[i]]
+      i += 1
+    end
 
     conflict
   end
@@ -189,6 +199,7 @@ d "++ #{cnt_update}" if cnt_update > 0
     conflict_chunk_list.each { |conflict_chunk|
       conflict_thread = []
       conflict_chunk.each { |program|
+
         program.conflict = true
         i = 0
         begin
@@ -214,10 +225,12 @@ d "++ #{cnt_update}" if cnt_update > 0
           end
           i += 1
         end while i < device_number && program.conflict
+
         if program.conflict
           @conflict_cnt += 1 
           program.slot = nil
         end
+
         program_list << program
       }
     }
@@ -233,11 +246,11 @@ d "++ #{cnt_update}" if cnt_update > 0
       if program.conflict && !program_update.conflict
         info_log "録画の衝突が回避された為、録画できるようになりました #{program.channel}: #{program.title}"
         program.slot = program_update.slot
-        program.slot = program_update.conflict
+        program.conflict = program_update.conflict
       elsif !program.conflict && program_update.conflict
         info_log "録画の衝突があった為、録画できません #{program.channel}: #{program.title}"
-        program.slot = program_update.slot
-        program.slot = program_update.conflict
+        program.slot = nil
+        program.conflict = program_update.conflict
       end
     }
   end
@@ -638,8 +651,23 @@ d "! #{@pid[slot_num]} is stil running  / #{slot_num} '#{using}'"
       return
     end
 
+    cnt = 0
+    lockdir = "#{@temporary}/ptxlock"
+    begin 
+      Dir.mkdir lockdir
+    rescue Errno::EEXIST
+      sleep 1
+      cnt += 1
+      if cnt > 15
+        d "! lock failed"
+        if Time.now > File.mtime(lockdir) + 15 && Dir.rmdir(lockdir)
+          d "! delete lockdir"
+        end
+      end
+      retry
+    end
+
     @slot[slot_num] = using
-    sleep(2)
     pid = Process::fork
     if pid
 d "+#{pid} #{slot_num} '#{using}' fork"
@@ -647,6 +675,13 @@ d "+#{pid} #{slot_num} '#{using}' fork"
     else
       proc.call
       exit
+    end
+
+    sleep 3
+    begin
+      Dir.rmdir lockdir
+    rescue Errno::EXXX
+      d "! already lockdir deleted"
     end
   end
 
@@ -680,6 +715,15 @@ d "!partial"
 
 #d cmd
       log = `#{cmd}`
+      if /pid = (\d+)\nC\/N = (\d+.\d+)dB\nRecording...\nRecorded (\d+)sec/ =~ log
+        d "succeeded"
+        d "pid: #{$1}"
+        d "#{$2} dB"
+        d "#{$3} sec"
+      else
+        d log.inspect
+      end
+
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
 d " #{Process.pid} ---- recording end #{slot_num} #{ch}, #{sec}  use #{device}"
         info_log "#{start} - #{program.stop} 「#{program.title}」録画終了"
@@ -704,6 +748,17 @@ d " #{Process.pid} ++++ get_epg #{slot_num}, #{ch}, #{sec}  use #{device}"
       ts_name = "#{@temporary}/epg_#{ch}_#{time}_#{sec}.ts"
 
       log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name}_now 2>&1`
+      if /Cannot tune to the specified channel/ =~ log
+#        d "この時間帯はEPGを取得できません"
+        exit
+      elsif /pid = (\d+)\nC\/N = (\d+.\d+)dB\nRecording...\nRecorded (\d+)sec/ =~ log
+        d "succeeded"
+        d "pid: #{$1}"
+        d "#{$2} dB"
+        d "#{$3} sec"
+      else
+        d log.inspect
+      end
 #d log
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
       # "using device: dev/ptx0.t0\npid = 3000\nCannot open tuner device: dev/ptx0.t0\n"
@@ -759,7 +814,7 @@ class ControlList
 #      d "!! 現状の仕組みでは発生しないはず？番組が何かデータ更新された？"
 #    end
     if program_old.priority <= 0 && program.priority > 0
-      info_log " +#{program.channel}: 「#{program.title}」を録画します"
+      info_log " +#{program.channel}: #{program.start}-#{program.stop}「#{program.title}」を録画します"
     elsif program_old.priority > 0 && program.priority <= 0
       info_log " -#{program.channel}: 「#{program.title}」を録画解除します"
       d "!! 現状の仕組みでは発生しないはず？番組が何かデータ更新された？"

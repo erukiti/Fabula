@@ -576,6 +576,26 @@ class TC_EPG < Test::Unit::TestCase
   end
 
   def test_resolve
+    # 0個
+    epg = EPG.new(DummyEPG, [
+    ])
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, false)
+
+    # 1個のみ
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39', :priority => 1},
+    ])
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, false)
+    assert_equal(epg.program_list[0].conflict, false)
+    assert_not_nil(epg.program_list[0].slot)
+
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_not_nil(epg.program_list.find{ |a| a.title == "1"}.slot)
+
     # 非衝突 (時間連続)
     epg = EPG.new(DummyEPG, [
       {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39', :priority => 1},
@@ -585,7 +605,38 @@ class TC_EPG < Test::Unit::TestCase
     epg.resolve_conflict 1
     assert_equal(epg.conflict?, false)
     assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_not_nil(epg.program_list.find{ |a| a.title == "1"}.slot)
     assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
+    assert_not_nil(epg.program_list.find{ |a| a.title == "2"}.slot)
+
+    # 非衝突 (時間不連続 * 2)
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39', :priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 4, 15), :stop => Time.local(2011, 6, 3, 4, 45), :channel => 'C39', :priority => 1},
+    ])
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_not_nil(epg.program_list.find{ |a| a.title == "1"}.slot)
+    assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
+    assert_not_nil(epg.program_list.find{ |a| a.title == "2"}.slot)
+
+    # 非衝突 (時間不連続 * 3)
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39', :priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 4, 15), :stop => Time.local(2011, 6, 3, 4, 45), :channel => 'C39', :priority => 1},
+      {:title => "3", :start => Time.local(2011,6, 3, 5, 15), :stop => Time.local(2011, 6, 3, 5, 45), :channel => 'C39', :priority => 1},
+    ])
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, false)
+    assert_equal(epg.program_list.find{ |a| a.title == "1"}.conflict, false)
+    assert_not_nil(epg.program_list.find{ |a| a.title == "1"}.slot)
+    assert_equal(epg.program_list.find{ |a| a.title == "2"}.conflict, false)
+    assert_not_nil(epg.program_list.find{ |a| a.title == "2"}.slot)
+    assert_equal(epg.program_list.find{ |a| a.title == "3"}.conflict, false)
+    assert_not_nil(epg.program_list.find{ |a| a.title == "3"}.slot)
 
     # スロット一つ。必ず 3 がコンフリクトになるケース
     epg = EPG.new(DummyEPG, [
