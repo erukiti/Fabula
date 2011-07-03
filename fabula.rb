@@ -150,27 +150,28 @@ d "++ #{cnt_update}" if cnt_update > 0
   end
 
   def conflict_chunk_list
-    @program_list.sort! { |a, b| a.start <=> b.start }
+    program_list = @program_list.find_all{ |a| a.priority > 0}.sort { |a, b| a.start <=> b.start }
+
     conflict = []
 
     i = 0
     begin
-      next if @program_list[i].stop <= @program_list[i + 1].start
+      next if program_list[i].stop < program_list[i + 1].start
 
-      conflict << [@program_list[i], @program_list[i + 1]]
-      stop_mark = @program_list[i].stop >= @program_list[i + 1].stop ? @program_list[i].stop : @program_list[i + 1].stop 
+      conflict << [program_list[i], program_list[i + 1]]
+      stop_mark = program_list[i].stop >= program_list[i + 1].stop ? program_list[i].stop : program_list[i + 1].stop 
       j = i + 2
-      while j <= @program_list.size - 1
-        break if stop_mark <= @program_list[j].start
-        conflict.last << @program_list[j]
-        stop_mark = stop_mark >= @program_list[j].stop ? stop_mark : @program_list[j].stop
+      while j <= program_list.size - 1
+        break if stop_mark <= program_list[j].start
+        conflict.last << program_list[j]
+        stop_mark = stop_mark >= program_list[j].stop ? stop_mark : program_list[j].stop
         j += 1
       end
       conflict.last.sort! { |a, b| a.priority == b.priority ? a.start <=> b.start : b.priority <=> a.priority}
       i = j - 1
     ensure 
       i += 1
-    end while i < @program_list.size - 2
+    end while i < program_list.size - 2
 
     conflict
   end
@@ -180,6 +181,9 @@ d "++ #{cnt_update}" if cnt_update > 0
     @conflict_cnt = 0
 
     return if @program_list.size == 0
+
+    program_list = []
+
 
     # conflict_chunk をそれぞれ解決する
     conflict_chunk_list.each { |conflict_chunk|
@@ -213,12 +217,29 @@ d "++ #{cnt_update}" if cnt_update > 0
         if program.conflict
           @conflict_cnt += 1 
           program.slot = nil
-d "! conflict #{program.channel, #{program.title}"
-          info_log("録画にコンフリクトがあった為、録画できません #{program.channel}: #{program.title}"
         end
+        program_list << program
       }
     }
 
+    @program_list.each { |program|
+      program_update = program_list.find{ |a| program.start == a.start && program.stop == a.stop && program.channel == a.channel}
+      unless program_update
+        program_update = program.dup
+        program_update.slot = nil
+        program_update.conflict = false
+      end
+
+      if program.conflict && !program_update.conflict
+        info_log "録画の衝突が回避された為、録画できるようになりました #{program.channel}: #{program.title}"
+        program.slot = program_update.slot
+        program.slot = program_update.conflict
+      elsif !program.conflict && program_update.conflict
+        info_log "録画の衝突があった為、録画できません #{program.channel}: #{program.title}"
+        program.slot = program_update.slot
+        program.slot = program_update.conflict
+      end
+    }
   end
 
   def conflict?
@@ -359,7 +380,7 @@ class Program
 
     @slot = data[:slot] # ひとまずデバッグ用途以外では使わない
     @conflict = false
-    @priority = data[:priority]
+    @priority = data[:priority] || 0
   end
 
   def to_a
@@ -512,6 +533,7 @@ d "  load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
       next unless program.slot
       if Time.now >= program.start - 60 * 3 && Time.now < program.stop - 60 * 1
         # 3分前～録画中なので録画モードに入る (開始前ならsleep で準備される)
+
         @accessor.record(program)
         ch_neartime.delete(program.channel)
         is_record_near = true
@@ -551,7 +573,7 @@ class FabulaAccessor
   def initialize
     @device = []
     @slot = []
-    @pid = {}
+    @pid = []
     @temporary = "./tmp"
   end
 
@@ -581,18 +603,20 @@ class FabulaAccessor
   def waitall_non_blocking
 #d "waitall"
     is_need_wait = false
-    @pid.each { |slot_num, pid|
-#d "waitpid: #{pid}"
+    (0...@device.size).each { |slot_num|
+#d "waitpid: #{slot_num}, #{@pid[slot_num]}"
+      next unless @pid[slot_num]
+
       begin 
-        if Process.waitpid(pid, Process::WNOHANG | Process::WUNTRACED) == nil
+        if Process.waitpid(@pid[slot_num], Process::WNOHANG | Process::WUNTRACED) == nil
           is_need_wait = true
         else
-d "-#{pid} #{slot_num}, #{@slot[slot_num]} end"
+d "-#{@pid[slot_num]} #{slot_num}, #{@slot[slot_num]} end"
           @pid[slot_num] = nil
           @slot[slot_num] = nil
         end
       rescue Errno::ECHILD
-d "-#{pid}: #{slot_num}, #{@slot[slot_num]} is not found"
+d "-#{@pid[slot_num]}: #{slot_num}, #{@slot[slot_num]} is not found"
         @pid[slot_num] = nil
         @slot[slot_num] = nil
       end
@@ -702,7 +726,6 @@ class ControlList
 
   def program_mapper(program_old)
     program = program_old.dup
-    program.priority = 0 if program.priority == nil
     @control_list.each {|control|
       next if control[:title] != nil && Regexp.new(control[:title]) !~ program.title
       next if control[:desc] != nil && Regexp.new(control[:desc]) !~ program.desc
@@ -729,11 +752,24 @@ class ControlList
 #d "#{program.channel}: #{program.start} - #{program.stop}: #{program.title} priority: #{program.priority}"
     }
 
+#    if (program_old.priority == nil || program_old.priority <= 0) && program.priority > 0
+#      info_log " +#{program.channel}: 「#{program.title}」を録画します"
+#    elsif (program_old.priority != nil && program_old.priority > 0 && program.priority <= 0
+#      info_log " -#{program.channel}: 「#{program.title}」を録画解除します"
+#      d "!! 現状の仕組みでは発生しないはず？番組が何かデータ更新された？"
+#    end
+    if program_old.priority <= 0 && program.priority > 0
+      info_log " +#{program.channel}: 「#{program.title}」を録画します"
+    elsif program_old.priority > 0 && program.priority <= 0
+      info_log " -#{program.channel}: 「#{program.title}」を録画解除します"
+      d "!! 現状の仕組みでは発生しないはず？番組が何かデータ更新された？"
+    end
+
     program
   end
 
   def add(title, desc, category, time_range, channel, priority)
-    @control_list << {:title => title, :desc => desc, :category => category, :time_range => time_range, :channel => channel, :priority => priority}
+    @control_list << {:title => title, :desc => desc, :category => category, :time_range => time_range, :channel => channel, :priority => priority || 0}
     self
   end
 
@@ -781,14 +817,12 @@ end
 # FIXME map! に動作をかえる？
 
 if $0 == __FILE__
-  d "fabula start #{Time.now}"
   info_log "fabula start #{Time.now}"
   fabula = Fabula.new
   fabula.load_config
   fabula.load_order
   fabula.load_control
   fabula.main_loop
-  d "fabula end #{Time.now}"
   info_log "fabula end #{Time.now}"
 end
 

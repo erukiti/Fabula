@@ -707,6 +707,17 @@ class TC_EPG < Test::Unit::TestCase
     assert_equal(epg.program_list.find{ |a| a.title == "4"}.conflict, false)
     assert_equal(epg.program_list.find{ |a| a.title == "5"}.conflict, false)
 
+    # スロット一つ、一つは録画しないもの
+    epg = EPG.new(DummyEPG, [
+      {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
+      {:title => "2", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 45), :channel => 'C39' ,:priority => 1},
+      {:title => "3", :start => Time.local(2011,6, 3, 3, 15), :stop => Time.local(2011, 6, 3, 3, 30), :channel => 'C37' ,:priority => 0},
+      {:title => "4", :start => Time.local(2011,6, 3, 3, 45), :stop => Time.local(2011, 6, 3, 4, 15), :channel => 'C39' ,:priority => 1},
+    ])
+
+    epg.resolve_conflict 1
+    assert_equal(epg.conflict?, false)
+
     # スロット一つ、必ず3 と、2 or 4 がコンフリクトになるケース (update により merge したデータの場合)
     epg = EPG.new(DummyEPG, [
       {:title => "1", :start => Time.local(2011,6, 3, 2, 45), :stop => Time.local(2011, 6, 3, 3, 15), :channel => 'C39' ,:priority => 1},
