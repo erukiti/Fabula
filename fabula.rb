@@ -128,14 +128,14 @@ d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
       #replace されるので alert を出す
       (replaced_start...cnt_master).each { |cnt|
 d "- #{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」"
-        info_log "#{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」が削除されました"
+        info_log "#{master[cnt].channel}:#{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」が削除されました"
 
       }
 
       #replace を行いつつ、上書き側の alert を出す
       (cnt_start...cnt_updater).each { |cnt|
 d "+ #{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」"
-        info_log "#{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」にリプレイスされました"
+        info_log "#{updater[cnt].channel}:#{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」にリプレイスされました"
         new_program_list << updater[cnt]
       }
 
@@ -651,7 +651,18 @@ d "! #{@pid[slot_num]} is stil running  / #{slot_num} '#{using}'"
       return
     end
 
-    cnt = 0
+    @slot[slot_num] = using
+    pid = Process::fork
+    if pid
+d "+#{pid} #{slot_num} '#{using}' fork"
+      @pid[slot_num] = pid
+    else
+      proc.call
+      exit
+    end
+  end
+
+  def execute(cmd)
     lockdir = "#{@temporary}/ptxlock"
     begin 
       Dir.mkdir lockdir
@@ -667,66 +678,61 @@ d "! #{@pid[slot_num]} is stil running  / #{slot_num} '#{using}'"
       retry
     end
 
-    @slot[slot_num] = using
-    pid = Process::fork
-    if pid
-d "+#{pid} #{slot_num} '#{using}' fork"
-      @pid[slot_num] = pid
-    else
-      proc.call
-      exit
-    end
-
     sleep 3
     begin
       Dir.rmdir lockdir
     rescue Errno::EXXX
       d "! already lockdir deleted"
     end
+    cnt = 0
+  end
+
+  def wait_channel(slot_num)
+    roundsec = @device.size * 2
+
+    tm = Time.now
+    next_sec = tm.sec + roundsec - (tm.sec+ slot_num * 2) % roundsec
+    sleep(next_sec.to_f - (tm.sec + tm.usec.to_f / (1000 * 1000)))
   end
 
   def record(program)
 #d "rec"
     slot_num = program.slot
+    device = @device[program.slot]
+    ch = program.channel
+
     fork(slot_num, "rec_#{program.channel}") {
-      while Time.now < program.start - 15
-        sleep((program.start - Time.now - 15 > 10) ? 10 : (program.start - Time.now - 15))
-      end
+      starttime = program.start.strftime("%Y%m%d%H%M")
 
-      device = @device[program.slot]
-      ch = program.channel
-      start = Time.now > program.start ? Time.now : program.start
-
-
-      sec = Integer(program.stop - start - 15)
-d " #{Process.pid} ++++ recording #{slot_num} #{ch}, #{sec} use #{device} #{start} - #{program.stop} 「#{program.title}」"
-
-      time = program.start.strftime("%Y%m%d%H%M")
-      if start == program.start
-        ts_name = "#{@recording}/#{time}_#{ch}_#{program.title}.ts"
-        info_log "#{start} - #{program.stop} 「#{program.title}」録画開始"
-      else
-        ts_name = "#{@recording}/#{time}_#{ch}_#{program.title}_※.ts"
-        info_log "#{start}(#{program.start}) - #{program.stop} 「#{program.title}」録画開始(部分録画)"
+      if Time.now > program.start
+        # 既に録画時間が始まってしまっている
+        ts_name = "#{@recording}/#{starttime}_#{ch}_#{program.title}_※.ts"
+        info_log "#{program.start} - #{program.stop} 「#{program.title}」録画開始(部分録画)"
 d "!partial"
+      else
+        ts_name = "#{@recording}/#{starttime}_#{ch}_#{program.title}.ts"
+        info_log "#{program.start} - #{program.stop} 「#{program.title}」録画開始"
+        sleep(program.start - Time.now - 30) if Time.now < program.start - 30
       end
+    wait_channel(slot_num) # slot_num と時間による排他制御 (2秒間隔)
+    recsec = Integer(program.stop - Time.now - 30)
 
-      cmd = "recpt1 --b25 --strip --device #{device} #{ch} #{sec} #{ts_name} 2>&1"
-
+d " #{Process.pid} ++++recording #{slot_num} #{ch}, #{recsec} use #{device} #{program.start} - #{program.stop} 「#{program.title}」"
 #d cmd
+      cmd = "recpt1 --b25 --strip --device #{device} #{ch} #{recsec} #{ts_name} 2>&1"
       log = `#{cmd}`
       if /pid = (\d+)\nC\/N = (\d+.\d+)dB\nRecording...\nRecorded (\d+)sec/ =~ log
-        d "succeeded"
-        d "pid: #{$1}"
-        d "#{$2} dB"
-        d "#{$3} sec"
+        d " succeeded"
+        d " pid: #{$1}"
+        d " #{$2} dB"
+        d " #{$3} sec"
       else
         d log.inspect
       end
 
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
-d " #{Process.pid} ---- recording end #{slot_num} #{ch}, #{sec}  use #{device}"
-        info_log "#{start} - #{program.stop} 「#{program.title}」録画終了"
+d " #{Process.pid} ---- recording end #{slot_num} #{ch}, #{recsec}  use #{device}"
+        info_log "#{program.start} - #{program.stop} 「#{program.title}」録画終了"
       exit
     }
   end
@@ -742,20 +748,22 @@ d "! slot が取得できなかった"
     slot_num = slots[0]
     fork(slot_num, "epg_#{ch}") {
       device = @device[slot_num]
+
+      starttime = Time.now.strftime("%Y%m%d%H%M%S")
+      ts_name = "#{@temporary}/epg_#{ch}_#{starttime}_#{sec}.ts"
+
+      wait_channel(slot_num) # slot_num と時間による排他制御 (2秒間隔)
+
 d " #{Process.pid} ++++ get_epg #{slot_num}, #{ch}, #{sec}  use #{device}"
-
-      time = Time.now.strftime("%Y%m%d%H%M%S")
-      ts_name = "#{@temporary}/epg_#{ch}_#{time}_#{sec}.ts"
-
       log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name}_now 2>&1`
       if /Cannot tune to the specified channel/ =~ log
 #        d "この時間帯はEPGを取得できません"
         exit
       elsif /pid = (\d+)\nC\/N = (\d+.\d+)dB\nRecording...\nRecorded (\d+)sec/ =~ log
-        d "succeeded"
-        d "pid: #{$1}"
-        d "#{$2} dB"
-        d "#{$3} sec"
+        d " succeeded"
+        d " pid: #{$1}"
+        d " #{$2} dB"
+        d " #{$3} sec"
       else
         d log.inspect
       end
@@ -833,6 +841,9 @@ end
 class Log
   def Log::output(message, level = :debug)
     File.open("fabula.log", "a") { |f|
+      tm = Time.now
+      f << sprintf("%s.%08d  ", tm.strftime('%Y/%m/%d %H:%M:%S'), tm.usec)
+
       if message.is_a? String
         f << "#{message}\n"
       else
@@ -844,6 +855,9 @@ class Log
 
     if level == :info
       File.open("fabula_user.log", "a") { |f|
+      tm = Time.now
+      f << sprintf("%s.%08d  ", tm.strftime('%Y/%m/%d %H:%M:%S'), tm.usec)
+
         if message.is_a? String
           f << "#{message}\n"
         else
