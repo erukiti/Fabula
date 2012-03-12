@@ -35,5 +35,3 @@ create_sample_config.rb と create_sample_control.rb を適当に弄ってから
 将来的には、cron で毎分起動 (ただし別プロセスで起動中はそのまま終了する) って感じにしようかと思ってたり
 
 
-
-
