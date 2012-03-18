@@ -878,6 +878,18 @@ class FabulaLoggerFile
   end
 end
 
+class FabulaLoggerFluent
+  def initialize
+    require 'fluent-logger'
+
+    @log = Fluent::Logger::FluentLogger.new('Fabula')
+  end
+
+  def output(message, level = :debug)
+    @log.post(level.to_s, message)
+  end
+end
+
 
 class Logger
   @@logger = nil
