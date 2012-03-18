@@ -1,7 +1,7 @@
 #! /usr/bin/env ruby
-# encoding: utf-8
+# coding: utf-8
 
-$KCODE = 'UTF8'
+$KCODE = 'UTF8' if RUBY_VERSION < '1.9.0'
 
 require 'rexml/document'
 require 'yaml'
@@ -845,8 +845,8 @@ class ControlList
 
 end
 
-class Log
-  def Log::output(message, level = :debug)
+class FabulaLoggerFile
+  def output(message, level = :debug)
     File.open("fabula.log", "a") { |f|
       tm = Time.now
       f << sprintf("%s.%08d  ", tm.strftime('%Y/%m/%d %H:%M:%S'), tm.usec)
@@ -878,12 +878,29 @@ class Log
   end
 end
 
+
+class Logger
+  @@logger = nil
+
+  def Logger::config(option)
+    if option[:is_fluent]
+      @@logger = FabulaLoggerFluent.new
+    else
+      @@logger = FabulaLoggerFile.new
+    end
+  end
+
+  def Logger::output(message, level = :debug)
+    @@logger.output(message, level)
+  end
+end
+
 def d(message, level = :debug)
-  Log::output(message, level)
+  Logger::output(message, level)
 end
 
 def info_log(message)
-  Log::output(message, :info)
+  Logger::output(message, :info)
 end
 
 class WatchDog
@@ -929,7 +946,18 @@ end
 # FIXME map! に動作をかえる？
 
 if $0 == __FILE__
+  require 'optparse'
+  option = {:interface => :yaml}
+  OptionParser.new do |op|
+    op.on('-L', '--fluent-logger') {|v| option[:is_fluent] = true}
+    #op.on('-y', '--yaml') {|v| option[:interface] = :yaml}
+    #op.on('-m', '--mongodb') {|v| option[:interface] = :mongodb}
+    op.parse!(ARGV)
+  end
+
   watchdog = WatchDog.new("tmp/fabula")
+  Logger.config(option)
+
   info_log "fabula start #{Time.now}"
 
   fabula = Fabula.new

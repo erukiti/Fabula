@@ -1,7 +1,7 @@
 # coding: utf-8
-require 'yaml'
+$KCODE = 'UTF8' if RUBY_VERSION < '1.9.0'
 
-$KCODE = 'U'
+require 'yaml'
 
 config = {
   :channel => {

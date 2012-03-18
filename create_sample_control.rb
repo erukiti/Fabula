@@ -1,5 +1,5 @@
 # coding: utf-8
-$KCODE = 'U'
+$KCODE = 'UTF8' if RUBY_VERSION < '1.9.0'
 
 require 'yaml'
 control_list = []
