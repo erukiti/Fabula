@@ -425,6 +425,10 @@ class Fabula
     @cl = nil
   end
 
+  def set_watchdog(watchdog)
+    @watchdog = watchdog
+  end
+
   def injection_accessor(accessor, opt = nil)
     @accessor = accessor.new(opt)
   end
@@ -519,6 +523,8 @@ d "  load_epgdump #{ch} #{sec} : #{epg.fresh[ch]}"
       @epg.resolve_conflict(@accessor.number_slot)
       save_order
       is_record_near = main
+
+      @watchdog.update
       sleep(3)
     end
 
@@ -713,14 +719,14 @@ d "!partial"
       else
         ts_name = "#{@recording}/#{starttime}_#{ch}_#{program.title}.ts"
         info_log "#{program.start} - #{program.stop} 「#{program.title}」録画開始"
-        sleep(program.start - Time.now - 30) if Time.now < program.start - 30
+        sleep(program.start - Time.now - 15) if Time.now < program.start - 15
       end
     wait_channel(slot_num) # slot_num と時間による排他制御 (2秒間隔)
-    recsec = Integer(program.stop - Time.now - 30)
+    recsec = Integer(program.stop - Time.now - 15)
 
 d " #{Process.pid} ++++recording #{slot_num} #{ch}, #{recsec} use #{device} #{program.start} - #{program.stop} 「#{program.title}」"
+      cmd = "recpt1 --b25 --strip --sid hd --device #{device} #{ch} #{recsec} #{ts_name} 2>&1"
 #d cmd
-      cmd = "recpt1 --b25 --strip --device #{device} #{ch} #{recsec} #{ts_name} 2>&1"
       log = `#{cmd}`
       if /pid = (\d+)\nC\/N = (\d+.\d+)dB\nRecording...\nRecorded (\d+)sec/ =~ log
         d " succeeded"
@@ -880,15 +886,54 @@ def info_log(message)
   Log::output(message, :info)
 end
 
+class WatchDog
+  def initialize(tmpdir)
+    @tmpdir = tmpdir
+    begin
+      Dir.mkdir tmpdir
+    rescue Errno::EEXIST
+      mtime = File.mtime tmpdir
+      if Time.now <= mtime + 60
+        # まだ実行中
+        exit
+      else
+        Dir.glob("#{tmpdir}/*.pid") { |f|
+          /(\d+).pid$/ =~ f
+          begin 
+            Process.kill(:KILL, $1.to_i)
+          rescue Errno::ESRCH
+            # 既にそのプロセスは無かった
+          end
 
+          File.unlink(f)
+        }
+      end
 
+      Dir.rmdir tmpdir
+      puts "retry"
+      retry
+    end
+  end
+
+  def update
+    FileUtils.touch [@tmpdir, "#{@tmpdir}/#{Process.pid}.pid"]
+  end
+
+  def fin
+    unlink("#{@tmpdir}/#{Process.pid}.pid")
+    unlink(@tmpdir)
+  end
+end
 
 # program_list = epg.program_list.map { |program| cl.program_mapper(program)}
 # FIXME map! に動作をかえる？
 
 if $0 == __FILE__
+  watchdog = WatchDog.new("tmp/fabula")
   info_log "fabula start #{Time.now}"
+
   fabula = Fabula.new
+  fabula.set_watchdog(watchdog)
   fabula.load_config
   fabula.load_order
   fabula.load_control
