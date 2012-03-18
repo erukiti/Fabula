@@ -1,9 +1,10 @@
 #! /usr/bin/env ruby
+# coding: utf-8
 
 $KCODE = 'UTF8'
 
 require 'test/unit'
-require 'fabula.rb'
+require './fabula.rb'
 
 class TC_EPGFromEpgdump < Test::Unit::TestCase
   def test_time_from_epgdump
