@@ -128,14 +128,12 @@ d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
 
       #replace されるので alert を出す
       (replaced_start...cnt_master).each { |cnt|
-d "- #{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」"
         info_log "#{master[cnt].channel}:#{master[cnt].start} - #{master[cnt].stop} 「#{master[cnt].title}」が削除されました"
 
       }
 
       #replace を行いつつ、上書き側の alert を出す
       (cnt_start...cnt_updater).each { |cnt|
-d "+ #{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」"
         info_log "#{updater[cnt].channel}:#{updater[cnt].start} - #{updater[cnt].stop} 「#{updater[cnt].title}」にリプレイスされました"
         new_program_list << updater[cnt]
       }
@@ -631,12 +629,12 @@ class FabulaAccessor
         if Process.waitpid(@pid[slot_num], Process::WNOHANG | Process::WUNTRACED) == nil
           is_need_wait = true
         else
-d "-#{@pid[slot_num]} #{slot_num}, #{@slot[slot_num]} end"
+d "#{slot_num} -#{@pid[slot_num]} #{@slot[slot_num]} end"
           @pid[slot_num] = nil
           @slot[slot_num] = nil
         end
       rescue Errno::ECHILD
-d "-#{@pid[slot_num]}: #{slot_num}, #{@slot[slot_num]} is not found"
+d "#{slot_num} -#{@pid[slot_num]}: #{@slot[slot_num]} is not found"
         @pid[slot_num] = nil
         @slot[slot_num] = nil
       end
@@ -654,14 +652,14 @@ d "-#{@pid[slot_num]}: #{slot_num}, #{@slot[slot_num]} is not found"
     return if @slot.find { |u| u == using}
 
     if @pid[slot_num]
-d "! #{@pid[slot_num]} is stil running  / #{slot_num} '#{using}'"
+d "#{slot_num} ! #{@pid[slot_num]} is stil running  / '#{using}'"
       return
     end
 
     @slot[slot_num] = using
     pid = Process::fork
     if pid
-d "+#{pid} #{slot_num} '#{using}' fork"
+d "#{slot_num} +#{pid} '#{using}' fork"
       @pid[slot_num] = pid
     else
       proc.call
@@ -715,16 +713,16 @@ d "+#{pid} #{slot_num} '#{using}' fork"
         # 既に録画時間が始まってしまっている
         ts_name = "#{@recording}/#{starttime}_#{ch}_#{program.title}_※.ts"
         info_log "#{program.start} - #{program.stop} 「#{program.title}」録画開始(部分録画)"
-d "!partial"
+d "#{slot_num} !partial"
       else
         ts_name = "#{@recording}/#{starttime}_#{ch}_#{program.title}.ts"
         info_log "#{program.start} - #{program.stop} 「#{program.title}」録画開始"
         sleep(program.start - Time.now - 15) if Time.now < program.start - 15
       end
     wait_channel(slot_num) # slot_num と時間による排他制御 (2秒間隔)
-    recsec = Integer(program.stop - Time.now - 15)
+    recsec = Integer(program.stop - Time.now - 30)
 
-d " #{Process.pid} ++++recording #{slot_num} #{ch}, #{recsec} use #{device} #{program.start} - #{program.stop} 「#{program.title}」"
+d "#{slot_num} #{Process.pid} ++++recording #{ch}, #{recsec} use #{device} #{program.start} - #{program.stop} 「#{program.title}」"
       cmd = "recpt1 --b25 --strip --sid hd --device #{device} #{ch} #{recsec} #{ts_name} 2>&1"
 #d cmd
       log = `#{cmd}`
@@ -738,7 +736,7 @@ d " #{Process.pid} ++++recording #{slot_num} #{ch}, #{recsec} use #{device} #{pr
       end
 
       # "using device: /dev/ptx0.t0\npid = 15485\nC/N = 27.299331dB\nRecording...\nRecorded 3sec\n"
-d " #{Process.pid} ---- recording end #{slot_num} #{ch}, #{recsec}  use #{device}"
+d "#{slot_num} #{Process.pid} ---- recording end #{ch}, #{recsec}  use #{device}"
         info_log "#{program.start} - #{program.stop} 「#{program.title}」録画終了"
       exit
     }
@@ -761,16 +759,16 @@ d "! slot が取得できなかった"
 
       wait_channel(slot_num) # slot_num と時間による排他制御 (2秒間隔)
 
-d " #{Process.pid} ++++ get_epg #{slot_num}, #{ch}, #{sec}  use #{device}"
+d "#{slot_num} #{Process.pid} ++++ get_epg #{ch}, #{sec}  use #{device}"
       log = `recpt1 --device #{device} #{ch} #{sec} #{ts_name}_now 2>&1`
       if /Cannot tune to the specified channel/ =~ log
 #        d "この時間帯はEPGを取得できません"
         exit
       elsif /pid = (\d+)\nC\/N = (\d+.\d+)dB\nRecording...\nRecorded (\d+)sec/ =~ log
-        d " succeeded"
-        d " pid: #{$1}"
-        d " #{$2} dB"
-        d " #{$3} sec"
+        d "#{slot_num} succeeded"
+        d "#{slot_num} pid: #{$1}"
+        d "#{slot_num} #{$2} dB"
+        d "#{slot_num} #{$3} sec"
       else
         d log.inspect
       end
@@ -779,7 +777,7 @@ d " #{Process.pid} ++++ get_epg #{slot_num}, #{ch}, #{sec}  use #{device}"
       # "using device: dev/ptx0.t0\npid = 3000\nCannot open tuner device: dev/ptx0.t0\n"
 
       File.rename("#{ts_name}_now", ts_name)
-d " #{Process.pid} ---- get_epg end #{slot_num} #{ch}, #{sec}  use #{device}"
+d "#{slot_num} #{Process.pid} ---- get_epg end #{ch}, #{sec}  use #{device}"
       exit
     }
   end
@@ -847,18 +845,20 @@ end
 
 class FabulaLoggerFile
   def output(message, level = :debug)
-    File.open("fabula.log", "a") { |f|
-      tm = Time.now
-      f << sprintf("%s.%08d  ", tm.strftime('%Y/%m/%d %H:%M:%S'), tm.usec)
+    if level == :debug
+      File.open("fabula.log", "a") { |f|
+        tm = Time.now
+        f << sprintf("%s.%08d  ", tm.strftime('%Y/%m/%d %H:%M:%S'), tm.usec)
 
-      if message.is_a? String
-        f << "#{message}\n"
-      else
-        f << "#{message.inspect}\n"
-      end
-      #f << "#{caller[0]}\n"
-      f.flush
-    }
+        if message.is_a? String
+          f << "#{message}\n"
+        else
+          f << "#{message.inspect}\n"
+        end
+        #f << "#{caller[0]}\n"
+        f.flush
+      }
+    end
 
     if level == :info
       File.open("fabula_user.log", "a") { |f|
@@ -890,6 +890,11 @@ class FabulaLoggerFluent
   end
 end
 
+class FabulaLoggerNull
+  def output(message, level = :debug)
+  end
+end
+
 
 class Logger
   @@logger = nil
@@ -900,6 +905,10 @@ class Logger
     else
       @@logger = FabulaLoggerFile.new
     end
+  end
+
+  def Logger::set_logger(klass)
+    @@logger = klass.new
   end
 
   def Logger::output(message, level = :debug)

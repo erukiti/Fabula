@@ -6,6 +6,9 @@ $KCODE = 'UTF8' if RUBY_VERSION < '1.9.0'
 require 'test/unit'
 require './fabula.rb'
 
+Logger::set_logger(FabulaLoggerNull)
+
+
 class TC_EPGFromEpgdump < Test::Unit::TestCase
   def test_time_from_epgdump
     tm = EPGFromEpgdump.time_from_epgdump("20110603024000 +0900")
