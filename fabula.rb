@@ -47,10 +47,7 @@ class EPG
     epg_updater.program_list.each { |program|
       unless channel[program.channel]
         channel[program.channel] = true
-
-        if fresh_need_update?(epg_updater, channel)
-          @fresh[program.channel] = epg_updater.fresh[program.channel] 
-        end
+        fresh_update(epg_updater, program.channel)
 d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
       @last_fresh[program.channel] = Time.now
       end
@@ -72,7 +69,11 @@ d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
     !@fresh[channel] || (epg_updater.fresh[channel] && @fresh[channel] < epg_updater.fresh[channel])
   end
 
-
+  def fresh_update(epg_updater, channel)
+    if fresh_need_update?(epg_updater, channel)
+      @fresh[channel] = epg_updater.fresh[channel] 
+    end
+  end
 
 
 
