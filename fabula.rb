@@ -45,9 +45,13 @@ class EPG
   def update(epg_updater)
     new_program_list = []
 	get_channels(epg_updater).each { |ch|
-      new_program_list += update_ch(@program_list.find_all{|program| program.channel == ch} , epg_updater.program_list.find_all{|program| program.channel == ch})
+      new_program_list += update_ch(get_programs_at_channel(@program_list, ch), get_programs_at_channel(epg_updater.program_list, ch))
     }
     @program_list = new_program_list
+  end
+
+  def get_programs_at_channel(programs, channel)
+    programs.select{|program| program.channel == channel}
   end
 
   def get_channels(epg_updater)
