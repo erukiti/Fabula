@@ -48,7 +48,7 @@ class EPG
       unless channel[program.channel]
         channel[program.channel] = true
 
-        if !@fresh[program.channel] || (epg_updater.fresh[program.channel] && @fresh[program.channel] < epg_updater.fresh[program.channel]) 
+        if fresh_need_update?(epg_updater, channel)
           @fresh[program.channel] = epg_updater.fresh[program.channel] 
         end
 d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
@@ -67,6 +67,23 @@ d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
     }
     @program_list = new_program_list
   end
+
+  def fresh_need_update?(epg_updater, channel)
+    !@fresh[channel] || (epg_updater.fresh[channel] && @fresh[channel] < epg_updater.fresh[channel])
+  end
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   def update_ch(master, updater)
     # epg_updater に含まれている時間の範囲を算出する
