@@ -45,7 +45,7 @@ class EPG
   def update(epg_updater)
     new_program_list = []
 	get_channels(epg_updater).each { |ch|
-      new_program_list += update_ch(get_programs_at_channel(@program_list, ch), get_programs_at_channel(epg_updater.program_list, ch))
+      new_program_list += programs_merge(get_programs_at_channel(@program_list, ch), get_programs_at_channel(epg_updater.program_list, ch))
     }
     @program_list = new_program_list
   end
@@ -86,7 +86,7 @@ class EPG
 
 
 
-  def update_ch(master, updater)
+  def programs_merge(master, updater)
     # epg_updater に含まれている時間の範囲を算出する
 
     cnt_update = 0
