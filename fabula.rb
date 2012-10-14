@@ -43,26 +43,24 @@ class EPG
   end
 
   def update(epg_updater)
-    channel = {}
-    epg_updater.program_list.each { |program|
-      unless channel[program.channel]
-        channel[program.channel] = true
-        fresh_update(epg_updater, program.channel)
-d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
-      @last_fresh[program.channel] = Time.now
-      end
-    }
-    @program_list.each { |program|
-      unless channel[program.channel]
-        channel[program.channel] = true 
-      end
-    }
-
     new_program_list = []
-	channel.each { |ch, name|
+	get_channels(epg_updater).each { |ch|
       new_program_list += update_ch(@program_list.find_all{|program| program.channel == ch} , epg_updater.program_list.find_all{|program| program.channel == ch})
     }
     @program_list = new_program_list
+  end
+
+  def get_channels(epg_updater)
+	channel_is_exists = {}
+    epg_updater.program_list.each { |program|
+      unless channel_is_exists[program.channel]
+        channel_is_exists[program.channel] = true
+        fresh_update(epg_updater, program.channel)
+        @last_fresh[program.channel] = Time.now
+      end
+    }
+    @program_list.each{|program| channel_is_exists[program.channel] = true unless channel_is_exists[program.channel]}
+    channel_is_exists.keys
   end
 
   def fresh_need_update?(epg_updater, channel)
@@ -70,9 +68,7 @@ d "  #{program.channel}: @fresh = #{@fresh[program.channel]}"
   end
 
   def fresh_update(epg_updater, channel)
-    if fresh_need_update?(epg_updater, channel)
-      @fresh[channel] = epg_updater.fresh[channel] 
-    end
+    @fresh[channel] = epg_updater.fresh[channel] if fresh_need_update?(epg_updater, channel)
   end
 
 
