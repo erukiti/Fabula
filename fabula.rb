@@ -717,7 +717,7 @@ d "#{slot_num} !partial"
       else
         ts_name = "#{@recording}/#{starttime}_#{ch}_#{program.title}.ts"
         info_log "#{program.start} - #{program.stop} 「#{program.title}」録画開始"
-        sleep(program.start - Time.now - 15) if Time.now < program.start - 15
+        sleep(program.start - Time.now - 10) if Time.now < program.start - 10
       end
     wait_channel(slot_num) # slot_num と時間による排他制御 (2秒間隔)
     recsec = Integer(program.stop - Time.now - 30)
